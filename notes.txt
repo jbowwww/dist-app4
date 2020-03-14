@@ -1,0 +1,28 @@
+200315
+Tasks fro 200310 still
+First
+	- check & correct all debug() log names
+	- ascertain if new Model() calls onCreate correctly, and behaves correctly with discriminator models
+	- Implement log level filtering ability
+	
+200310
+Task list TODO
+- using 'debug' module, re-implement logging levels i.e. error, warn, info, verbose, debug with easy way to adjust on per-file basis - using cmd line/env vars so no editing of source files required
+
+For FS module
+Implement Library model - see handwritten note somewhere
+Implement Source, Target models
+Implement Document and subtypes e.g. PDF, Word, HTML, RTF, Plain Text, etc
+Implement Binary and subtypes e.g. Executable, Library, Dynamic Library, Kernel Module
+	= Data with subsubtypes for e.g. .zip & other archives, ..?
+		- Image 
+ ** Should binary be a type in a heirarchy or is too broad? example SVG is an image but can be text(??)
+ ** Or should binary/text (aka mode) just be an attribute that canb be Text|Binary
+
+200305
+gradually work thru fs/*.js and move needed functionatlity into FsEntry/dir/file models? anything remaining into a ../modules
+
+--------
+"relationships" in an anrtefact DB (at least basic/primary ones) can be automatically created wherever a "domain" object (ie something thaat is  a mongoose schema/model) document instance references another. e.g. [File].ParentDir -> [Dir] has a "is contained by" type relationship (direction - ie can be "contains" ian the opposite direction - could choose to infer this by mongo DB referencing style/direction.
+
+Use clusterPRocesses() from dist-app3, modify from having to use combine()'s on File.watch and File.find() , make a '[Model].stream()' or something that encapsulates the .watch and .find() sources(async iterables)
