@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//('model/plugin/custom-hooks');
+const log = require('@jbowwww/log').disable('debug');//('model/plugin/custom-hooks');
 // const console = require('../../stdio.js').Get('model/plugin/custom-hooks.js', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
@@ -13,6 +13,7 @@ const statPlugin = require('./stat.js');
  * by overriding schema.prototype.static and schema.prototype.method
  * This behaviour can be disabled by supplying an options object as 
  * 3rd param to static() or method() with options.noCustomMiddleare = true
+ * 200317: 2nd and 3rd params (fn and options) can be in opposite order (for aesthetic reasons)
  */
 // 190218 Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
 module.exports = function customHooksSchemaPlugin(schema, options) {
@@ -23,7 +24,13 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 		if (!_.isString(name)) {
 			throw new TypeError('name should be a string');
 		} else if (!_.isFunction(fn)) {
-			throw new TypeError('fn should be a function');
+			if (_.isPlainObject(fn) && _.isFunction(options)) {
+				const o = fn;
+				fn = options;
+				options = o;
+			} else {
+				throw new TypeError('fn should be a function');
+			}
 		}
 		schema.plugin(statPlugin, [ name ]);
 		// log.verbose(`schema: ${_.keys(schema.s.hooks).join(', ')}`);
@@ -51,7 +58,13 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 		if (!_.isString(name)) {
 			throw new TypeError('name should be a string');
 		} else if (!_.isFunction(fn)) {
-			throw new TypeError('fn should be a function');
+			if (_.isPlainObject(fn) && _.isFunction(options)) {
+				const o = fn;
+				fn = options;
+				options = o;
+			} else {
+				throw new TypeError('fn should be a function');
+			}
 		}
 		schema.plugin(statPlugin, [ name ]);
 		const schemaHooksExecPost = Q.denodeify(schema.s.hooks.execPost.bind(schema.s.hooks));

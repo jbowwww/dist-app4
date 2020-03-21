@@ -6,7 +6,7 @@ const nodePath = require('path');
 const mongoose = require('mongoose');
 const FsEntry = require('./filesys-entry.js');
 
-let dirSchema = new mongoose.Schema({ });
+let dirSchema = new mongoose.Schema({ }, { defaultFindQuery: { path: undefined } });
 
 // dirSchema.plugin(require('./plugin/stat.js'), { data: {} });
 
@@ -19,7 +19,7 @@ let dirSchema = new mongoose.Schema({ });
 // });
 
 dirSchema.static('iterate', async function* iterate(options = {}) {
-	const newDoc = new this({ path: options.path });
+	const newDoc = new this(await createRawFsEntry(options.path));
 	yield newDoc;
 	yield* newDoc.iterate({ ...options, path: undefined });
 });
@@ -52,12 +52,20 @@ dirSchema.method('iterate', async function* iterate(options = {}) {
 	}
 });
 
+async function createRawFsEntry(path, dir) {
+	const stats = await nodeFs.lstat(path);
+	const fsEntry = {
+		path, dir, stats,
+		fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'
+	};
+	return fsEntry;
+}
+
 dirSchema.method('read', async function* read() {
 	yield* (await nodeFs.readdir(this.path))
-		.map(name => FsEntry.findOrCreate({
-			path: nodePath.join(this.path, name),
-			dir: this._id
-		}));
+		.map(async name => await FsEntry.findOrCreate(
+			await createRawFsEntry(nodePath.join(this.path, name), this._id)
+	));
 });
 // only works in newer nodejs?
 // 	for await (const dirent of await nodeFs.opendir(this.path)) {

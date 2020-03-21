@@ -1,8 +1,8 @@
 "use strict";
-const debug = require('debug')('model/plugin/artefact');
+const log = require('@jbowwww/log');//('model/plugin/artefact');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
-// const _ = require('lodash');
+const _ = require('lodash');
 const mongoose = require('mongoose');
 // mongoose.set('debug', true);
 const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs, iff, tap } = require('../../promise-pipe.js');
@@ -15,7 +15,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		return ctorFunc(Artefact((this)));
 	};
 	
-	// console.debug(`artefactSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
+	// log.debug(`artefactSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 	
 	schema.add({
 		// _artefact: { type: mongoose.SchemaTypes.Mixed, required: false, default: undefined },
@@ -25,9 +25,12 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 	// schema.virtual('_artefact');
 
 
-	schema.query.asArtefact = async function asArtefact(options = {})
+	schema.query.asArtefact = async function* asArtefact(options = {})
 	{
-		return this.exec().map(a => a.getArtefact)
+		for await (const a of this) {
+			yield a.getArtefact();
+		}
+		// return this.map(a => a.getArtefact)
 	};
 
 	// Dont think going to use this ultimately. Original thought was to allow syntax like Artefact.File.findOrCreate()
@@ -50,7 +53,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		} /*else if (!(typeof cb === 'function')) {
 			throw new TypeError(`getArtefact: callback cb must be supplied`);
 		}*/
-		console.verbose(`getArtefact(${inspect(options)}, ${inspect(cb)}) this=${inspect(this)}`)
+		log.verbose(`getArtefact(${inspect(options)}, ${inspect(cb)}) this=${inspect(this)}`)
 		const doc = this;
 		const docModel = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
 		const docModelName = docModel.modelName;
@@ -67,7 +70,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		
 		// let cacheKey = 'doc-' + doc._primary._id;//.toString();
 		// let a = _artefacts[cacheKey];
-		// console.debug(`getArtefact: doc._id=${doc._id} cacheKey=${cacheKey}\na=${inspect(a)}\n_artefacts=${inspect(_artefacts)}`);
+		// log.debug(`getArtefact: doc._id=${doc._id} cacheKey=${cacheKey}\na=${inspect(a)}\n_artefacts=${inspect(_artefacts)}`);
 		// if (!!a) { return a; } 
 		// _artefacts[cacheKey] = {a:1};	// placeholder until artefact is created
 		// var dk = schema.get('discriminatorKey');
@@ -106,7 +109,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 							maxBatchSize: 10,
 							batchTimeout: 750
 						}, opts);
-						console.debug(`Artefact.save(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
+						log.debug(`Artefact.save(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
 						return Promise.all(_.map(this, (data, dataName) => data.$__save(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts)))
 						.then(() => this);
 						// await Promise.all(
@@ -114,7 +117,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 						// )
 						// return this;
 					} catch (e) {
-						console.error(`Artefact.save() error: ${e.stack||e}`)
+						log.error(`Artefact.save() error: ${e.stack||e}`)
 					}
 					// .then(() => this);
 				},
@@ -124,23 +127,23 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 						maxBatchSize: 10,
 						batchTimeout: 750
 					}, opts);
-					console.debug(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
+					log.debug(`Artefact.bulkSave(opts=${inspect(opts, { compact: true })}: ${inspect(this, { compact: false })}`);
 					return Q.all(_.map(this, (data, dataName) => data.bulkSave(opts.meta && opts.meta[dataName] ? opts.meta[dataName] : opts)))
 					.then(() => this);
 				},
 
 				addMetaData(modelName, data, promisePipe) {
 					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
-					console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
+					log.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
 					if (this[modelName]) {
-						console.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
+						log.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
 						return Q(this);
 					} else {
 						var model = mongoose.model(modelName);
 						if (!model) throw new Error(`model '${modelName}' does not exist`);
 						return model.construct(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
 						.then(meta => doMetaPipe(meta, promisePipe))
-						.tap(meta => console.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, meta=${inspect(meta, { compact: false })}`))
+						.tap(meta => log.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}, meta=${inspect(meta, { compact: false })}`))
 						.then(meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, configurable: true, value: meta }));
 					}
 				},
@@ -149,7 +152,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 					var model = mongoose.model(modelName);
 					return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
 					.then(meta => doMetaPipe(meta, promisePipe))
-					.tap(meta => console.debug(`getArtefact: modelName=${modelName} modelName='${docModelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`))
+					.tap(meta => log.debug(`getArtefact: modelName=${modelName} modelName='${docModelName}': model=${model.count()} meta=${inspect(meta, { compact: false })}, promisePipe: ${promisePipe?'yes':'no'}`))
 					.then(meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, configurable: true, value: meta }));
 				},
 
@@ -158,7 +161,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 					return model.findOne({ _primary: doc, _primaryType: docModelName })
 					.then(meta => iff(meta, 
 						meta => doMetaPipe(meta, promisePipe),
-						tap(meta => console.debug(`getArtefact: modelName=${modelName} docModelName='${docModelName}': model=${model.count()} meta=${!meta?'(null)':inspect(meta, { compact: false })}`)),
+						tap(meta => log.debug(`getArtefact: modelName=${modelName} docModelName='${docModelName}': model=${model.count()} meta=${!meta?'(null)':inspect(meta, { compact: false })}`)),
 						meta => Object.defineProperty(this, modelName, { writeable: true, enumerable: true, configurable: true, value: meta })));
 				}
 
@@ -173,17 +176,17 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 			// _artefacts[cacheKey] = a
 
 			//(dk=${dk})
-			console.debug(`[model ${docModelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);	
+			log.debug(`[model ${docModelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);	
 
 			await Promise.all(_.map(allModels, modelName => a[modelName] ? a[modelName] : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)));
-			 console.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
+			 log.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
 			
 			if (cb) await cb(a);
-			// console.debug(`_artefacts=${inspect(_artefacts)}`)
+			// log.debug(`_artefacts=${inspect(_artefacts)}`)
 			// delete _artefacts[cacheKey];
 				 // })
 		} catch (e) {
-			console.warn(`getArtefact error: ${e.stack||e}`);
+			log.warn(`getArtefact error: ${e.stack||e}`);
 			// docModel._stats.errors.push(e);
 		}
 		return a;	
@@ -208,10 +211,10 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 				} 
 			});
 			options = _.defaults(options, { concurrency: 8 });
-			console.debug(`[model ${modelName}].getArtefacts().promisePipe(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
+			log.debug(`[model ${modelName}].getArtefacts().promisePipe(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
 			return promisePipe(cursor, options, ...fns);
 		}});
-		console.debug(`[model ${modelName}].getArtefacts(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
+		log.debug(`[model ${modelName}].getArtefacts(): options=${inspect(options, { compact: true })} cursor=${inspect(cursor, { compact: false })}`);
 		return cursor;
 	};
 

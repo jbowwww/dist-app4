@@ -10,7 +10,7 @@ const FsEntry = mongoose.model('fs'); //require('./filesys-entry.js');
 let file = new mongoose.Schema({
 	hash: { type: String, /*default: '',*/ required: false },
 	hashUpdated: { type: Date, /*default: 0,*/ required: false }
-});
+}, { defaultFindQuery: { path: undefined } });
 
 file.plugin(require('../plugin/stat.js'), [ 'doHash' ]);
 

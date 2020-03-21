@@ -40,7 +40,7 @@ disk.static('iterate', async function iterate(task) {
 			const diskDoc = await model.findOrCreate(disk, dbOpt);
 			await (async function mapPartitions(container, containerPartitionDoc) {
 			 (	!container || !container.children ? null
-			 : 	await pMap(container.children, async partition => {
+			 : 	await map(container.children, async partition => {
 				 	partition = {
 				 		...partition,
 				 		disk: diskDoc,

@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//('model/plugin/standard');
+const log = require('@jbowwww/log')/*.disable('debug')*/;//('model/plugin/standard');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
@@ -8,7 +8,8 @@ const mongoose = require('mongoose');
 const plugins = {
 	timestamp: require('./timestamp.js'),
 	customHooks: require('./custom-hooks.js'),
-	stat: require('./stat.js')
+	stat: require('./stat.js'),
+	artefact: require('./artefact.js')
 };
 
 /* Standard/common schema methods, statics
@@ -24,8 +25,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 										// Alternatively: Change static and method methods in customHooks so instead of always using pre and post, unless using
 										// hooks is necessary, it just creates stat entries, and creates schema method wrappers that increase stat counters
 	const trackedMethods = {
-		instance: [ "validate", "save", "bulkSave" ],
-		static: [ "findOrCreate", "upsert" ]
+		instance: [ "validate", "save", "bulkSave", "updateDocument" ],
+		static: [ "create", "findOrCreate", "upsert" ]
 	};
 	schema.plugin(plugins.stat, trackedMethods.instance);
 	_.forEach(trackedMethods.instance, function(methodName) {
@@ -129,26 +130,27 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * but only marks paths as modified if the (deep-equal) value actually changed
 	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
 	 * but it hasn't wqorked for me in the past, so i wrote my own. */
-	schema.method('updateDocument', async function updateDocument(update, pathPrefix = '') {
-		var model = this.constructor;
-		if (pathPrefix !== '' && !pathPrefix.endsWith('.'))
-			pathPrefix += '.';
-		_.forEach(update, (updVal, propName) => {
-			var fullPath = pathPrefix + propName;
-			var docVal = this.get(fullPath);
-			var schemaType = this.schema.path(fullPath);
-			if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray', 'ObjectID' ].includes(schemaType.instance))) {
-				log.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: ${schemaType.instance}`);
-				this.updateDocument(/*schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id ? updVal._id :*/ updVal, fullPath + '.');
-			} else if (!_.isEqual(docVal, updVal)) {
-				log.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
-				this.set(fullPath, updVal);
-			} else {
-				log.debug(`[model ${model.modelName}].updateDocument:${fullPath}: No update to ${docVal}`);
-			}
-		});
-		return this;
-	});
+	// schema.method('updateDocument', async function updateDocument(update, pathPrefix = '') {
+	// 	var model = this.constructor;
+	// 	if (pathPrefix !== '' && !pathPrefix.endsWith('.'))
+	// 		pathPrefix += '.';
+	// 	_.forEach(update, (updVal, propName) => {
+	// 		var fullPath = pathPrefix + propName;
+	// 		var docVal = this.get(fullPath);
+	// 		var schemaType = this.schema.path(fullPath);
+	// 		if (schemaType && ([ 'Embedded', 'Mixed', 'Map', 'Array', 'DocumentArray', 'ObjectID' ].includes(schemaType.instance))) {
+	// 			log.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: ${schemaType.instance}, use ._id: ${(schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal && updVal._id)}`);
+	// 			this.updateDocument(schemaType.options.ref && schemaType.instance === 'ObjectID' && updVal /*&& updVal._id //? updVal._id : updVal, fullPath + '.');
+	// 		// } else*/
+	// 		 if (!_.isEqual(docVal, updVal)) {
+	// 			log.debug(`[model ${model.modelName}].updateDocument: ${fullPath}: Updating ${docVal} to ${updVal} (schemaType: ${schemaType && schemaType.instance}`);
+	// 			this.set(fullPath, updVal);
+	// 		} else {
+	// 			log.debug(`[model ${model.modelName}].updateDocument:${fullPath}: No update to ${docVal}`);
+	// 		}
+	// 	});
+	// 	return this;
+	// });
 
 	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.
 	 * Or just create a new doc (in memory, not DB - uses constructor func and not model.create())
@@ -164,7 +166,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... 
 	 * args: // [query, ] data[, options][, cb] */
 	schema.static('findOrCreate', async function findOrCreate(...args) {
-		var cb, query, data, model, options = {
+		var cb, query, data, model = this, options = {
 			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
 			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
 		};
@@ -188,16 +190,23 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			options.query = _.mapValues(schema.get('defaultFindQuery'),
 				(v, k) => v === undefined ? data[k] : v);
 
+		// model.create() should do this... but what about default case e.g. fileType='unknoown' for fsEntry?
 		// var discriminatorKey = schema.get('discriminatorKey');
-		// var discriminator = discriminatorKey ? doc[discriminatorKey] : undefined;
-		var model = this;// discriminatorKey && discriminator && this.discriminators[discriminator] ? this.discriminators[discriminator] : this;
-		log.debug(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })} data='${inspect(data)}' data[dk]='${data[discriminatorKey]}': setting model='${(model.modelName)}'`);
+		// var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
+		// var model = discriminator && this.discriminators[discriminator]
+		// 	? this.discriminators[discriminator] : this;
+		// model = !!this.stats && this.stats.isDir() ? Dir :
+		// 	(!!this.stats && this.stats.isFile() ? File : this);
 		
-		const r = await model.findOne(options.query)
-		const doc = await (r ? r.updateDocument(data) : new model(data));
-		if (options.saveImmediate)
-			doc.save();
-		return doc;
+		let r = await model.findOne(options.query);
+		if (r) log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
+		else log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc not found, creating with data=${inspect(data)};`);
+		if (r) r.set(data); // does this always update the db ?? // await r.updateDocument(data);
+		else r = await model.create(data);//new model(data));
+		// if (options.saveImmediate)
+		r = await r.save();
+		log.debug(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+		return r;
 	});
 
 	// What is the difference between these methods and findOrCreate?? I think there was something but it may

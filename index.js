@@ -1,5 +1,5 @@
 "use strict";
-const debug = require('@jbowwww/debug');//('index')
+const debug = require('@jbowwww/log');//('index')
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
 const { map } = require('@jbowwww/promise');
@@ -44,8 +44,8 @@ var searches = [
 				for await (const a of File.find({ hash: { $exists: false } }).asArtefact()) {	// move that part to a query method on File, and also transform the File doc instance to artefact like { file } or { dir }
 					try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
 						await a.file
-							.doHash()
-							.save({ bulk: true });
+							.doHash();
+						await a.save({ bulk: true });
 					} catch (e) {
 						debug(`warn for hash: a=${inspect(a)}: ${e.stack||e}`);
 					}
