@@ -28,7 +28,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 	schema.query.asArtefact = async function* asArtefact(options = {})
 	{
 		for await (const a of this) {
-			yield a.getArtefact();
+			yield await a.getArtefact();
 		}
 		// return this.map(a => a.getArtefact)
 	};
@@ -53,7 +53,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		} /*else if (!(typeof cb === 'function')) {
 			throw new TypeError(`getArtefact: callback cb must be supplied`);
 		}*/
-		log.verbose(`getArtefact(${inspect(options)}, ${inspect(cb)}) this=${inspect(this)}`)
+		// log.verbose(`getArtefact(${inspect(options)}, ${inspect(cb)}) this=${inspect(this)}	`)
 		const doc = this;
 		const docModel = this.constructor; //dk && typeof dk === 'string' && dk.length>0 && doc[dk] && oldModel.discriminators[doc[dk]] ? oldModel.discriminators[doc[dk]] : oldModel;
 		const docModelName = docModel.modelName;
@@ -65,7 +65,10 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 		const allModels = options.meta ? _.keys(options.meta) :
 			_.filter(mongoose.modelNames(), modelName => {
 				var m = mongoose.model(modelName);
-				return m.discriminators === undefined && docModel.baseModelName != m.baseModelName && docModelName != m.baseModelName && docModel.baseModelName != modelName;
+				return m.discriminators === undefined && 
+					docModel.baseModelName != m.baseModelName &&
+					docModelName != m.baseModelName &&
+					docModel.baseModelName != modelName;
 			});
 		
 		// let cacheKey = 'doc-' + doc._primary._id;//.toString();
@@ -133,12 +136,14 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 				},
 
 				addMetaData(modelName, data, promisePipe) {
+					if (docModel.modelName == modelName) return null;
 					if (typeof modelName !== 'string') throw new TypeError('modelName must be a string');
 					log.debug(`Artefact.addMetaData('${modelName}'): this=${inspect(this, { compact: false })}`);
 					if (this[modelName]) {
 						log.debug(`Artefact.addMetaData('${modelName}'): meta exists: ${inspect(this[modelName], { compact: false })}`);
 						return Q(this);
 					} else {
+						log.debug(`Artefact.addMetaData('${modelName}'): meta doesnt! exists: ${inspect(this[modelName], { compact: false })}`);
 						var model = mongoose.model(modelName);
 						if (!model) throw new Error(`model '${modelName}' does not exist`);
 						return model.construct(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
@@ -149,6 +154,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 				},
 
 				addOrFindMetaData(modelName, data, promisePipe) {
+					if (docModel.modelName == modelName) return null;
 					var model = mongoose.model(modelName);
 					return model.findOrCreate(_.assign({ /*_artefact: a,*/ _primary: doc, _primaryType: docModelName }, data))
 					.then(meta => doMetaPipe(meta, promisePipe))
@@ -157,6 +163,7 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 				},
 
 				findMetaData(modelName, promisePipe) {
+					if (docModel.modelName == modelName) return null;
 					var model = mongoose.model(modelName);
 					return model.findOne({ _primary: doc, _primaryType: docModelName })
 					.then(meta => iff(meta, 
@@ -176,17 +183,17 @@ module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 			// _artefacts[cacheKey] = a
 
 			//(dk=${dk})
-			log.debug(`[model ${docModelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);	
+			// log.debug(`[model ${docModelName}].getArtefact(): a=${inspect(/*_.clone*/(a), { depth: 5, compact: false })} allModels=${allModels.join(', ')} options=${inspect(options)}`);	
 
 			await Promise.all(_.map(allModels, modelName => a[modelName] ? a[modelName] : a.findMetaData(modelName, options.meta ? options.meta[modelName] : undefined)));
-			 log.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
+			 // log.verbose(`getArtefact: docModelName=${docModelName} allModels=[ ${allModels.map(mn=>mn).join(', ')} ] a=${inspect(a, { compact: false })}`);
 			
 			if (cb) await cb(a);
 			// log.debug(`_artefacts=${inspect(_artefacts)}`)
 			// delete _artefacts[cacheKey];
 				 // })
 		} catch (e) {
-			log.warn(`getArtefact error: ${e.stack||e}`);
+			log.warn(`getArtefact error: ${e.stack||e} for doc = ${inspect(doc)}`);
 			// docModel._stats.errors.push(e);
 		}
 		return a;	

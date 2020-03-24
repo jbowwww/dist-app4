@@ -109,14 +109,19 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		schema.post(methodName, function(err, res, next) {
 			this.emit('err.' + methodName, res, err);
 			this._stats[methodName].errors.push(err);
-			log.error(`[model ${modelName}].post('${methodName}') ERROR: res=${inspect(res)} model._stats.${methodName}=${inspect(this._stats[methodName])}: error: ${err.stack||err}`);
+			log.error(`[model ${this.modelName}].post('${methodName}') ERROR: res=${inspect(res)} model._stats.${methodName}=${inspect(this._stats[methodName])}: error: ${err.stack||err}`);
 			return next(err);
 		});
 	});
 
-	// schema.static('create', function construct(data, cb) {
-	// 	return new (this)(data);
-	// });
+	schema.static('construct', function construct(data, cb) {
+		var discriminatorKey = schema.get('discriminatorKey');
+		var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
+		var model = discriminator && this.discriminators[discriminator]
+			? this.discriminators[discriminator] : this;
+		return new (model)(data);
+		cb(data);
+	});
 
 	
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
@@ -201,10 +206,15 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		let r = await model.findOne(options.query);
 		if (r) log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
 		else log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc not found, creating with data=${inspect(data)};`);
-		if (r) r.set(data); // does this always update the db ?? // await r.updateDocument(data);
-		else r = await model.create(data);//new model(data));
+		if (r) {
+			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
+			// await r.save();
+		}
+		else {
+			r = await model.construct(data);//new model(data));
+		}
 		// if (options.saveImmediate)
-		r = await r.save();
+		// r = await r.save();
 		log.debug(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
 		return r;
 	});

@@ -18,10 +18,30 @@ let dirSchema = new mongoose.Schema({ }, { defaultFindQuery: { path: undefined }
 // 	var root = await Dir.findOrCreate({ path: search.path, stat: await fs.stat(path)})
 // });
 
-dirSchema.static('iterate', async function* iterate(options = {}) {
-	const newDoc = new this(await createRawFsEntry(options.path));
-	yield newDoc;
-	yield* newDoc.iterate({ ...options, path: undefined });
+dirSchema.static('iterate', function iterate(options = {}) {
+	// return {
+	// 	asArtefact() {
+
+	// 	},
+	// 	[Symbol.asyncIterator]() {
+	// 		return this;
+	// 	},
+	// 	async next() {
+
+	// 	}
+	// }
+	const model = this;
+	var r = (async function* iterate(/*options = {}*/) {
+		const newDoc = new model(await createRawFsEntry(options.path));
+		yield newDoc;
+		yield* newDoc.iterate({ ...options, path: undefined });
+	})();
+	r.asArtefact = async function* asArtefact() {
+		for await (const data of this) {
+			yield await data.getArtefact();
+		}
+	};
+	return r;
 });
 
 dirSchema.method('iterate', async function* iterate(options = {}) {

@@ -12,6 +12,8 @@ const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 
+const Artefact = require('./Artefact.js');
+
 var searches = [
 	{ path: '/home/jk/code/dist-app4', maxDepth: 0, progress: true },
 	// { path: '/mnt/media', maxDepth:                   0, progress: true },
@@ -27,8 +29,10 @@ var searches = [
 			async function populate () {
 				await Disk.iterate();
 				await map(searches, async search => {
-					for await (const a of Dir.iterate(search)/*.asArtefacts()*/) {
+					for await (const a/*fse*/ of Dir.iterate(search).asArtefact()) {
+						// let a;
 						try {
+							// a = await fse.getArtefact();
 							debug(`a: ${inspect(a)}`);
 							a.save({ bulkSave: !!a.file })	// files can be bulk saved because they aren't referenced by anything else like Dirs are
 						} catch (e) {
@@ -39,31 +43,30 @@ var searches = [
 				app.logStats();
 			},
 
-			// TODO: Me next (above should theoretically be ok except need to code .asArtefacts query helper; probs need debugging/correcting)
-			async function hash () {
-				for await (const a of File.find({ hash: { $exists: false } }).asArtefact()) {	// move that part to a query method on File, and also transform the File doc instance to artefact like { file } or { dir }
-					try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
-						await a.file
-							.doHash();
-						await a.save({ bulk: true });
-					} catch (e) {
-						debug(`warn for hash: a=${inspect(a)}: ${e.stack||e}`);
-					}
-				}
-				app.logStats();			
-			},
+			// // TODO: Me next (above should theoretically be ok except need to code .asArtefacts query helper; probs need debugging/correcting)
+			// async function hash () {
+			// 	for await (const a of File.find({ hash: { $exists: false } }).asArtefact()) {	// move that part to a query method on File, and also transform the File doc instance to artefact like { file } or { dir }
+			// 		try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
+			// 			await a.file.doHash();
+			// 			await a.save({ bulk: true });
+			// 		} catch (e) {
+			// 			debug(`warn for hash: a=${inspect(a)}: ${e.stack||e}`);
+			// 		}
+			// 	}
+			// 	app.logStats();			
+			// },
 
-			async function populateAudio() {
-				for await (const a of File.find({ path: /\.mp3/i }).asArtefact()) {					
-					try {
-							a.audio = await Audio.findOrCreate({ _artefactId: a.file._id });
-							await a.save();	//bulkSave
-					} catch (e) {
-						debug(`warn for audio: f=${inspect(f)} ${e.stack||e}`);	
-					}
-				}
-				app.logStats();
-			}
+			// async function populateAudio() {
+			// 	for await (const a of File.find({ path: /\.mp3/i }).asArtefact()) {					
+			// 		try {
+			// 			a.audio = await Audio.findOrCreate({ _artefactId: a.file._id });
+			// 			await a.save();	//bulkSave
+			// 		} catch (e) {
+			// 			debug(`warn for audio: f=${inspect(f)} ${e.stack||e}`);	
+			// 		}
+			// 	}
+			// 	app.logStats();
+			// }
 		);
 	} catch (err) {
 		debug(`Overall cluster error: ${err.stack||err}`);

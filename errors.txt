@@ -1,0 +1,68 @@
+Error: dbConnect: Error opening db 'mongodb://localhost:27017/ArtefactsJS': MongoNetworkError: failed to connect to server [localhost:27017] on first connect [MongoNetworkError: connect ECONNREFUSED 127.0.0.1:27017]
+    at Pool.<anonymous> (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/topologies/server.js:438:11)
+    at Pool.emit (events.js:182:13)
+    at createConnection (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/pool.js:561:14)
+    at connect (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/pool.js:994:11)
+    at makeConnection (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:31:7)
+    at callback (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:264:5)
+    at Socket.err (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:294:7)
+    at Object.onceWrapper (events.js:273:13)
+    at Socket.emit (events.js:182:13)
+    at emitErrorNT (internal/streams/destroy.js:82:8)
+    at emitErrorAndCloseNT (internal/streams/destroy.js:50:3)
+    at process._tickCallback (internal/process/next_tick.js:63:19)
+From previous event:
+    at NativeConnection.Connection.openUri (/home/jk/code/dist-app4/node_modules/mongoose/lib/connection.js:706:19)
+    at Mongoose.connect (/home/jk/code/dist-app4/node_modules/mongoose/lib/index.js:333:15)
+    at Object.dbConnect (/home/jk/code/dist-app4/app.js:24:36)
+    at Object.wrapper [as dbConnect] (/home/jk/code/dist-app4/node_modules/lodash/lodash.js:4929:19)
+    at main (/home/jk/code/dist-app4/index6.js:33:13)
+    at Object.<anonymous> (/home/jk/code/dist-app4/index6.js:82:3)
+    at Module._compile (internal/modules/cjs/loader.js:689:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:700:10)
+    at Module.load (internal/modules/cjs/loader.js:599:32)
+    at tryModuleLoad (internal/modules/cjs/loader.js:538:12)
+    at Function.Module._load (internal/modules/cjs/loader.js:530:3)
+    at Function.Module.runMain (internal/modules/cjs/loader.js:742:12)
+    at startup (internal/bootstrap/node.js:282:19)
+    at bootstrapNodeJSCore (internal/bootstrap/node.js:743:3)
+    at Object.onError (/home/jk/code/dist-app4/app.js:136:10)
+    at Object.wrapper [as onError] (/home/jk/code/dist-app4/node_modules/lodash/lodash.js:4929:19)
+    at Object.dbConnect (/home/jk/code/dist-app4/app.js:29:8)
+    at process._tickCallback (internal/process/next_tick.js:68:7)
+
+Error: dbConnect: Error opening db 'mongodb://localhost:27017/ArtefactsJS': MongoNetworkError: failed to connect to server [localhost:27017] on first connect [Error: connect ECONNREFUSED 127.0.0.1:27017
+    at TCPConnectWrap.afterConnect [as oncomplete] (net.js:1137:16) {
+  name: 'MongoNetworkError',
+  [Symbol(mongoErrorContextSymbol)]: {}
+}]
+    at Pool.<anonymous> (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/topologies/server.js:438:11)
+    at Pool.emit (events.js:311:20)
+    at /home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/pool.js:561:14
+    at /home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/pool.js:994:11
+    at /home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:31:7
+    at callback (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:264:5)
+    at Socket.<anonymous> (/home/jk/code/dist-app4/node_modules/mongodb/lib/core/connection/connect.js:294:7)
+    at Object.onceWrapper (events.js:418:26)
+    at Socket.emit (events.js:311:20)
+    at emitErrorNT (internal/streams/destroy.js:92:8)
+    at emitErrorAndCloseNT (internal/streams/destroy.js:60:3)
+    at processTicksAndRejections (internal/process/task_queues.js:84:21)
+From previous event:
+    at NativeConnection.Connection.openUri (/home/jk/code/dist-app4/node_modules/mongoose/lib/connection.js:706:19)
+    at Mongoose.connect (/home/jk/code/dist-app4/node_modules/mongoose/lib/index.js:333:15)
+    at Object.dbConnect (/home/jk/code/dist-app4/app.js:24:36)
+    at Object.wrapper [as dbConnect] (/home/jk/code/dist-app4/node_modules/lodash/lodash.js:4929:19)
+    at main (/home/jk/code/dist-app4/index.js:24:13)
+    at Object.<anonymous> (/home/jk/code/dist-app4/index.js:71:4)
+    at Module._compile (internal/modules/cjs/loader.js:1158:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:1178:10)
+    at Module.load (internal/modules/cjs/loader.js:1002:32)
+    at Function.Module._load (internal/modules/cjs/loader.js:901:14)
+    at Function.executeUserEntryPoint [as runMain] (internal/modules/run_main.js:74:12)
+    at internal/main/run_main_module.js:18:47
+    at Object.onError (/home/jk/code/dist-app4/app.js:136:10)
+    at Object.wrapper [as onError] (/home/jk/code/dist-app4/node_modules/lodash/lodash.js:4929:19)
+    at Object.dbConnect (/home/jk/code/dist-app4/app.js:29:8)
+    at processTicksAndRejections (internal/process/task_queues.js:97:5)
+

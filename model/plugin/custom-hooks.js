@@ -3,8 +3,9 @@ const log = require('@jbowwww/log').disable('debug');//('model/plugin/custom-hoo
 // const console = require('../../stdio.js').Get('model/plugin/custom-hooks.js', { minLevel: 'log' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const _ = require('lodash');
-const Q = require('q');
-Q.longStackSupport = true;
+const { promisify } = require('util');
+// const Q = require('q');
+// Q.longStackSupport = true;
 const mongoose = require('mongoose');
 const { artefactDataPipe, chainPromiseFuncs } = require('../../promise-pipe.js');
 const statPlugin = require('./stat.js');
@@ -17,7 +18,6 @@ const statPlugin = require('./stat.js');
  */
 // 190218 Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
 module.exports = function customHooksSchemaPlugin(schema, options) {
-
 	// log.debug(`customHooksSchemaPlugin(): schema=${inspect(schema)}, options=${inspect(options)}, this=${inspect(this)}`);
 
 	_.set(schema, 'static', function mongoose_schema_static(name, fn, options = {}) {
@@ -33,25 +33,26 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 			}
 		}
 		schema.plugin(statPlugin, [ name ]);
-		// log.verbose(`schema: ${_.keys(schema.s.hooks).join(', ')}`);
-		// schema.s.hooks.hook.call(schema.s.hooks, name, fn);
-		// return mongoose.Schema.prototype.static.call(name, fn, options);
-		const schemaHooksExecPost = Q.denodeify(schema.s.hooks.execPost.bind(schema.s.hooks));
-		return mongoose.Schema.prototype.static.call(schema, name, options.noCustomMiddleware ? fn : function(...args) {
-			const model = this;
-			const modelName = model.modelName;
-			return Q.denodeify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, model, args)
-				.tap(result => log.verbose(`[model ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.then(() => Q(fn.apply(model, args)))
-				.tap(result => log.verbose(`[model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.then(result => schemaHooksExecPost(name, model, [ result ]/*, { error: undefined }*/))
-				.tap(result => log.verbose(`[model ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.catch(err => {
+		const schemaHooksExecPost = promisify(schema.s.hooks.execPost.bind(schema.s.hooks));
+		return mongoose.Schema.prototype.static.call(schema, name,
+			options.noCustomMiddleware ? fn 
+		 : 	async function(...args) {	
+				const model = this;
+				const modelName = model.modelName;
+				try {
+					let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, model, args)
+					log.verbose(`[model ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					result = await fn.apply(model, args);
+					log.verbose(`[model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					result = await schemaHooksExecPost(name, model, [ result ]/*, { error: undefined }*/);
+					log.verbose(`[model ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					return result;
+				} catch (err) {
 					log.warn(` ## [model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${err.stack||err}`);
 					schemaHooksExecPost(name, model, [ null ], { error: err });
 					throw err;
-				});
-		});
+				}
+			});
 	});
 
 	_.set(schema, 'method', function mongoose_schema_method(name, fn, options = {}) {
@@ -67,24 +68,27 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 			}
 		}
 		schema.plugin(statPlugin, [ name ]);
-		const schemaHooksExecPost = Q.denodeify(schema.s.hooks.execPost.bind(schema.s.hooks));
+		const schemaHooksExecPost = promisify(schema.s.hooks.execPost.bind(schema.s.hooks));
 		return mongoose.Schema.prototype.method.call(this, name,
-			options.noCustomMiddleware ? fn : function(...args) {
-			const doc = this;
-			const model = doc.constructor;
-			const modelName = model.modelName;
-			return Q.denodeify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, doc, args)
-				.tap(result => log.verbose(`[doc ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.then(() => Q(fn.apply(doc, args)))
-				.tap(result => log.verbose(`[doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.then(result => schemaHooksExecPost(name, doc, [ result ]/*, { error: undefined }*/))
-				.tap(result => log.verbose(`[doc ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`))
-				.catch(e => {
+			options.noCustomMiddleware ? fn 
+		 : 	async function(...args) {
+				const doc = this;
+				const model = doc.constructor;
+				const modelName = model.modelName;
+				try {
+					let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, doc, args); 
+					log.verbose(`[doc ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					result = await fn.apply(doc, args);
+					log.verbose(`[doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					result = await schemaHooksExecPost(name, doc, [ result ]/*, { error: undefined }*/);
+					log.verbose(`[doc ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					return result;
+				} catch (e) {
 					log.warn(` ## [doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${e.stack||err}`);
 					schemaHooksExecPost(name, doc, [ null ], { error: e });
 					throw e;
-				});
-		});
+				};
+			});
 	});
 
 };
