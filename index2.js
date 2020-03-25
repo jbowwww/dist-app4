@@ -11,6 +11,7 @@ const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
+const Artefact = require('./artefact.js');
 
 var searches = [
 	{ path: '/home/jk/code/dist-app4', maxDepth: 0, progress: true },
@@ -21,22 +22,16 @@ var searches = [
 
 (async function main() {
 	try {
-		await app.dbConnect();
 
-		Artefact(
-			File.find({ path: /\.mp3/i, 'stats.size': { '$gt': 0 } }),
-			Audio.from(File))
-		}, ({ file, audio }) => ({
-			
-		})
+		await app.dbConnect();
 		await clusterProcesses(
 
 			async function populate () {
 				await Disk.iterate();
 				await map(searches, async search => {
-					for await (const a of Dir.iterate(search)/*.asArtefacts()*/) {
-						Artefact( File.findOrCreate() );
-							// a.save({ bulkSave: !!a.file })	// files can be bulk saved because they aren't referenced by anything else like Dirs are
+					for await (const file of Dir.iterate(search)/*.asArtefacts()*/) {
+						try {
+							Artefact( file ).do();
 						} catch (e) {
 							debug(`warn for iterate: a=${inspect(a)}: ${e.stack||e}`);
 						}
@@ -60,28 +55,17 @@ var searches = [
 			},
 
 			async function populateAudio() {
-				Artefact(
+				await Artefact.pipe(
 					File.find({ path: /\.mp3/i }),
 					Audio,
-					a => (({ file, audio }) => {
-						audio: !!file && !audio || file._ts.updatedSince(audio._ts.updatedAt
-					}
 					({ file, audio }) => {
-						audio: file.)
-					})
-					({ file, audio }, a) => ({
-						audio: 
-					.asArtefact(({
-					=> ({
-				audio: /*await*/ Audio.findOrCreate({ _artefactId: a.file._id });
-							
-				})) {					
-					try {
-							await a.save();	//bulkSave
-					} catch (e) {
-						debug(`warn for audio: f=${inspect(f)} ${e.stack||e}`);	
+						audio: !!file && !audio || file._ts.updatedSince(audio._ts.updatedAt)
+						return {
+							file,
+							audio: await Audio.findOrCreate({ _artefactId: a.file._id })
+						};
 					}
-				}
+				);
 				app.logStats();
 			}
 		);
