@@ -31,11 +31,13 @@ var searches = [
 				await map(searches, async search => {
 					for await (const file of Dir.iterate(search)/*.asArtefacts()*/) {
 						try {
-							await Artefact( file, Audio ).do(({ file, audio }) => ({
-								file: file.doHash(),
-								audio: !audio || !audio.hasUpdatedSince(file) && file.path.test(/\.mp3\^/i)
-									? Audio.fromFile(file) : undefined
-							}));
+							await Artefact(file)
+								.with(Audio)
+								.do(({ file, /*fs, dir,*/ audio }) => ({
+									file: file.doHash(),
+									audio: !audio || !audio.hasUpdatedSince(file) && file.path.test(/\.mp3\^/i)
+										? Audio.fromFile(file) : undefined
+								})).save();
 						} catch (e) {
 							debug(`warn for iterate a=${inspect(a)}: ${e.stack||e}`);
 						}
