@@ -6,7 +6,7 @@ const _ = require('lodash');
 const mongoose = require('mongoose');
 // mongoose.set('debug', true);
 const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs, iff, tap } = require('../../promise-pipe.js');
-const Artefact = require('../../Artefact.js');
+// const Artefact = require('../../Artefact.js');
 
 module.exports = function artefactSchemaPlugin(schema, ctorFunc) {
 

@@ -26,7 +26,7 @@ let partition = new mongoose.Schema({
 
 partition.plugin(require('../plugin/standard.js'));
 partition.plugin(require('../plugin/bulk-save.js'));
-partition.plugin(require('../plugin/artefact.js'));
+// partition.plugin(require('../plugin/artefact.js'));
 
 function diskNameFromPartition(diskName) {
 	if (typeof diskName === 'string') {

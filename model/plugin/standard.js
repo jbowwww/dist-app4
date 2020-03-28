@@ -8,8 +8,7 @@ const mongoose = require('mongoose');
 const plugins = {
 	timestamp: require('./timestamp.js'),
 	customHooks: require('./custom-hooks.js'),
-	stat: require('./stat.js'),
-	artefact: require('./artefact.js')
+	stat: require('./stat.js')
 };
 
 /* Standard/common schema methods, statics
@@ -131,6 +130,48 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		 && 	this._ts.checkedAt > timestamp;
 	});
 
+	schema.static('findOrCreate', async function findOrCreate(...args) {
+		var cb, query, data, model = this, options = {
+			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
+			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
+		};
+		_.forEach(args, (arg, i) => {
+			if (typeof arg === 'object') {
+				if (!data) data = arg;
+				else options = { ...options, ...arg };
+			} else if (typeof arg === 'function') {
+				cb = arg;
+			} else {
+				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
+			}
+		});
+
+		// I don't think the parsing/defaulting logic here is correct
+		if (!options.query)
+			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
+		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string'))
+			options.query = _.pick(data, options.query);
+		else if (_.isObject(options.query))
+			options.query = _.mapValues(schema.get('defaultFindQuery'),
+				(v, k) => v === undefined ? data[k] : v);
+		
+		let r = await model.findOne(options.query);
+		if (r) log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
+		else log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc not found, creating with data=${inspect(data)};`);
+		if (r) {
+			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
+			// await r.save();
+		}
+		else {
+			r = await model.construct(data);//new model(data));
+		}
+		// if (options.saveImmediate)
+		// r = await r.save();
+		log.debug(`[model ${model.modelName}.findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+		return r;
+	});
+
+
 	/* Updates an (in memory, not DB) document with values in the update parameter,
 	 * but only marks paths as modified if the (deep-equal) value actually changed
 	 * I think mongoose is supposed to be able to doc.set() and only mark paths and subpaths that have actually changed, 
@@ -156,68 +197,6 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	// 	});
 	// 	return this;
 	// });
-
-	/* Find a document in the DB given the query, if it exists, and update the (in memory) document with supplied data.
-	 * Or just create a new doc (in memory, not DB - uses constructor func and not model.create())
-	 * If the schema has a discriminatorKey, checks incoming data object for that key and uses the corresponding discriminator model's functions
-	 * That way this plugin overall should work on schemas with discriminators or without, or both (I think) - e.g. FsEntry and File
-	 * If I was using model.create() instead of the constructor I think it is *supposed* to handle that automagically (but who knows)
-	 * But that's not the behaviour I want - I don't want it saving or validating anything until it's explicitly told to (in bulk, usuallyt)
-	 * Then again - maybe validation would be handy e.g. for a file object, before it gets passed to e.g. the audio plugin (... oh god this shit's getting complicated again)
-	 * 181015 - So now added functionality where data can be a function instead of an obejct, where the function returns an object (the data)
-	 * when it's called - but it will only get called if the data 2wasn't found first. Saves expensive operations if unnecessary. (like mm.parseFile())) 
-	 * !! Hold on - the use case here for Audio is different to File. Even if a File is found this method still does updateDocument(data),
-	 * whereas with Audio I think I just want to skip it completley - unless the file has changed more recently than the Audio document was updated/checked 
-	 * WOW this is getting complex again :) I think I can't use this function for the audio thing ... 
-	 * args: // [query, ] data[, options][, cb] */
-	schema.static('findOrCreate', async function findOrCreate(...args) {
-		var cb, query, data, model = this, options = {
-			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
-			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
-		};
-		_.forEach(args, (arg, i) => {
-			if (typeof arg === 'object') {
-				if (!data) data = arg;
-				else options = { ...options, ...arg };
-			} else if (typeof arg === 'function') {
-				cb = arg;
-			} else {
-				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
-			}
-		});
-
-		// I don't think the parsing/defaulting logic here is correct
-		if (!options.query)
-			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
-		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string'))
-			options.query = _.pick(data, options.query);
-		else if (_.isObject(options.query))
-			options.query = _.mapValues(schema.get('defaultFindQuery'),
-				(v, k) => v === undefined ? data[k] : v);
-
-		// model.create() should do this... but what about default case e.g. fileType='unknoown' for fsEntry?
-		// var discriminatorKey = schema.get('discriminatorKey');
-		// var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
-		// var model = discriminator && this.discriminators[discriminator]
-		// 	? this.discriminators[discriminator] : this;
-		// model = !!this.stats && this.stats.isDir() ? Dir :
-		// 	(!!this.stats && this.stats.isFile() ? File : this);
-		
-		let r = await model.findOne(options.query);
-		if (r) log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
-		else log.verbose(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): doc not found, creating with data=${inspect(data)};`);
-		if (r) {
-			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
-			// await r.save();
-		}
-		else {
-			r = await model.construct(data);//new model(data));
-		}
-		// if (options.saveImmediate)
-		// r = await r.save();
-		log.debug(`[model ${model.modelName}(dk(${discriminatorKey})=${data[discriminatorKey]})].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
-		return r;
-	});
 
 	// What is the difference between these methods and findOrCreate?? I think there was something but it may
 	// be so subtle and minor that it is not worth having both

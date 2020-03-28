@@ -3,7 +3,8 @@ const log = require('@jbowwww/log').disable('debug');
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const { EventEmitter } = require('events');
-const { Document, Model, Query, SchemaTypes } = require('mongoose');
+const mongoose = require('mongoose');
+const { Document, Model, Query, SchemaTypes } = mongoose;
 // mongoose.set('debug', true);
 // const { /*promisePipe,*/ artefactDataPipe, chainPromiseFuncs, iff, tap } = require('../../promise-pipe.js');
 
@@ -18,50 +19,104 @@ module.exports = Artefact;
  * for simple usage inside iteration loops, etc
  * e.g. (TODO)
  */
-async function Artefact(doc, ...extraArgs) {
+function Artefact(doc, ...extraArgs) {
+	if (!this instanceof Artefact)
+		return new Artefact(doc, ...extraArgs);
 	if (!(doc instanceof Document))
 		throw new TypeError(`doc should be a mongoose.Document (doc=${inspect(doc)})`);
+	
 	this._id = doc._id;
+	this._docs = new Set();
+	this._docsByType = new Map();
 	log.verbose(`Constructing Artefact _id=${this._id} from doc=${inspect(doc)}`);
-	for (const extra of extraArgs) {
-		const aIdType = extra.schema.path('_artefactId');
-		if (!aIdType || aIdType.type !== SchemaTypes.ObjectId)
-			throw new TypeError(`extras should be a mongoose.Document or mongoose.Model with the artefact model plugin`);
-		let doc;
+	
+	for (const extra of [ doc, ...extraArgs ]) {
 		if (extra instanceof Document) {
-			doc = extra;
-			// TODO: handle base models and set properties for those too e.g. FsEntry base of File
-		} else if (extra instanceof Model) {
-			doc = await extra.findOne({ _artefactId: this._id });
-			log.verbose(`Artefact _id=${this._id}: querying model='${extra.modelName}`);
-		}
-		if (doc) this[doc.model.modelName] = doc;
-		log.verbose(`Artefact _id=${this._id}: Adding extra doc=${inspect(doc)}`);
+			this.add(extra);
+		} /*else if (extra instanceof Model) {
+			thisextra.modelName] = extra.findOne({ _artefactId: this._id }).then((err, doc) => {
+				if (err) throw new Error(err);
+				this.add(doc);
+			});
+			log.verbose(`Artefact _id=${this._id}: querying model='${extra.modelName}, types= ${extra.modelName}, ${extra.baseModelName}`);
+		}*/
 	}
-	this.do = async function Artefact_do(options, fn) {
-		if (fn === undefined) { fn = options; options = {} };
-		if (!(fn instanceof Function)) throw new TypeError(`fn should be a function: fn=${inspect(fn)}`);
-		options = { save: true, ...options };
-		log.verbose(`Running do func on artefact _id=${this._id}`);
-		const a = await fn(this);
-		loglverbose(`Artefact do func yielded a=${inspect(a)}`);
-		if (options.save) {
-			await a.save();
-			log.verbose(`Artefact _id=${this._id} saved`);
-		} else {
-			log.verbose(`Artefact _id=${this._id} do func is not configured to save()`);
-		}
-		return a;
-	}
+
 	log.info(`Artefact _id=${this._id}=${inspect(this)}`);
 }
+
+Artefact.prototype.constructor = Artefact;
+
+Artefact.prototype = {
+
+	constructor: Artefact,
+	
+	get(model) {
+		return this._docsByType.get(model);
+	},
+	set(model, doc) {
+		doc._artefactId = this._id;
+		this._docs.add(doc);
+		this._docsByType.set(model, doc);
+		if (model.baseModelName)
+			this._docsByType.set(mongoose.model(model.baseModelName), doc);
+		return this;
+	},
+	
+	add(doc) {
+		const model = doc.constructor;
+		this.set(model, doc);
+		log.verbose(`Artefact _id=${this._id}: Adding doc=${inspect(doc)}, types = ${model.modelName},${model.baseModelName}`);
+		return this;
+	},
+
+	async do(options = {}, fn = (a) => {}) {
+		try {
+			if (fn === undefined) { fn = options; options = {} };
+			if (!(fn instanceof Function)) throw new TypeError(`fn should be a function: fn=${inspect(fn)}`);
+			options = { save: true, ...options };
+			log.verbose(`Running do func on artefact _id=${this._id}`);
+			const r = await fn(this);
+			//if (r) this.set(r);
+			log.verbose(`Artefact do func on artefact _id=${this._id} returned a=${inspect(this)}`);
+			if (options.save) {
+				await this.save();
+				log.verbose(`Artefact save for artefact _id=${this._id} returned a=${inspect(this)}`);
+			} else {
+				log.verbose(`Artefact _id=${this._id} do func is not configured to save()`);
+			}
+			return this;
+		} catch (e) {
+			var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
+			newError._artefact = this;
+			newError._artefactId = this._id;
+			throw newError;
+		}
+	},
+	
+	async save(options = {}) {
+		await Promise.all((() => {
+			const values = [];
+			const valuesIter = this._docs.values();
+			for (const value of valuesIter)
+				values.push(value);
+			return values;
+		})().map(doc => doc.save()));
+	},
+	
+	[util.inspect.custom]() {
+		return inspect(this._docsByType);//{ _id: this._id, ...Object.fromEntries(this._docsByType.entries()) });//Object.fromEntries([ [ '_id', this._id ], ...this._docsByType.entries() ]));
+	}
+
+};
 
 Artefact.pipe = async function* Artefact_pipe(iterable, ...args) {
 	if (!iterable || !iterable[Symbol.asyncIterator])
 		throw new TypeError(`Artefact.pipe: iterable is not an object or is not async iterable iterable=${inspect(iterable)}`);
-	if (args.length <= 0 || !(args[args.length - 1] instanceof Function))
-		throw new TypeError(`Artefact.pipe: Needs at least a pipe function`);
-	const fn = args.pop();
+	// if (args.length <= 0 || !(args[args.length - 1] instanceof Function))
+	// 	throw new TypeError(`Artefact.pipe: Needs at least a pipe function`);
+	const fn = (args.length <= 0 || !(args[args.length - 1] instanceof Function))
+		? a => a : args.pop();
 	for await (const doc of iterable) {
 		yield await Artefact(doc, ...extras).do(fn);
 	}

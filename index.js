@@ -12,7 +12,7 @@ const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
 const Audio = require('./model/audio.js');
 
-const Artefact = require('./Artefact.js');
+const Artefact = require('./artefact.js');
 
 var searches = [
 	{ path: '/home/jk/code/dist-app4', maxDepth: 0, progress: true },
