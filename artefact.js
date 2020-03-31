@@ -20,7 +20,7 @@ module.exports = Artefact;
  * e.g. (TODO)
  */
 function Artefact(doc, ...extraArgs) {
-	if (!this instanceof Artefact)
+	if (!(this instanceof Artefact))
 		return new Artefact(doc, ...extraArgs);
 	if (!(doc instanceof Document))
 		throw new TypeError(`doc should be a mongoose.Document (doc=${inspect(doc)})`);
@@ -28,26 +28,25 @@ function Artefact(doc, ...extraArgs) {
 	this._id = doc._id;
 	this._docs = new Set();
 	this._docsByType = new Map();
+	this._errors = [];
 	log.verbose(`Constructing Artefact _id=${this._id} from doc=${inspect(doc)}`);
 	
 	for (const extra of [ doc, ...extraArgs ]) {
 		if (extra instanceof Document) {
 			this.add(extra);
-		} /*else if (extra instanceof Model) {
-			thisextra.modelName] = extra.findOne({ _artefactId: this._id }).then((err, doc) => {
+		} else if (extra instanceof Model) {
+			this.add(extra.model, extra.findOne({ _artefactId: this._id }).then((err, doc) => {
 				if (err) throw new Error(err);
-				this.add(doc);
-			});
+				this.add(extra.model, doc);
+			}));
 			log.verbose(`Artefact _id=${this._id}: querying model='${extra.modelName}, types= ${extra.modelName}, ${extra.baseModelName}`);
-		}*/
+		}
 	}
 
 	log.info(`Artefact _id=${this._id}=${inspect(this)}`);
 }
 
-Artefact.prototype.constructor = Artefact;
-
-Artefact.prototype = {
+Artefact.prototype = { ...Artefact.prototype, 
 
 	constructor: Artefact,
 	
@@ -58,27 +57,93 @@ Artefact.prototype = {
 		doc._artefactId = this._id;
 		this._docs.add(doc);
 		this._docsByType.set(model, doc);
-		if (model.baseModelName)
+		if (model.baseModelName && doc instanceof Document)
 			this._docsByType.set(mongoose.model(model.baseModelName), doc);
+		log.verbose(`Artefact _id=${this._id}: Setting for model='${model.modelName},${doc instanceof Document && model.baseModelName}' doc=${inspect(doc)}`);
+		return this;
+	},
+	setArtefact(artefact) {
+		if (artefact) {
+			for (const doc of artefact)
+				if (doc) this.add(doc);
+		}
+		return this;
+	},
+	async resolveArtefact() {
+		this.setArtefact(await /*Promise.all*/(this.toDocuments()));
+	},
+
+	with(...args) { return this.add(...args); },
+	add(docOrModel) {
+		let model;
+		if (docOrModel instanceof Document) {
+			model = docOrModel.constructor;
+		} else if (typeof docOrModel === 'function'/* && docOrModel.name === 'Model'*/) {
+			model = docOrModel;
+			docOrModel = model.findOne();
+		} else if (docOrModel instanceof Query) {
+			model = docOrModel.model;
+		} else {
+			throw new TypeError(`docOrModel should be a Document or Model but is=${typeof docOrModel} ${inspect(docOrModel)}`);
+		}
+		if (docOrModel instanceof Query) {
+			docOrModel.setQuery({ ...docOrModel.getFilter(), _artefactId: /*SchemaTypes.ObjectId*/(this._id) });
+		}
+		this.set(model, docOrModel);
 		return this;
 	},
 	
-	add(doc) {
-		const model = doc.constructor;
-		this.set(model, doc);
-		log.verbose(`Artefact _id=${this._id}: Adding doc=${inspect(doc)}, types = ${model.modelName},${model.baseModelName}`);
-		return this;
+	async toDocuments() {
+		const values = [];
+		const valuesIter = this._docs.values();
+		for (const value of valuesIter)
+			values.push(value);
+		return await Promise.all(values.map(value => Promise.resolve(value)));
+	},
+	async toObject() {
+		const r = {};
+		const promises = [];
+		for (const [model, doc] of this._docsByType.entries()) {
+			r[model.modelName] = doc;
+			if (typeof doc.then === 'function') {
+				promises.push(doc.then(
+					realDoc => r[model.modelName] = realDoc
+				));
+			}
+		}
+		await Promise.all(promises);
+		log.verbose(`Artefact _id=${this._id} toObject=${inspect(r)}`);
+		return r;
 	},
 
-	async do(options = {}, fn = (a) => {}) {
-		try {
-			if (fn === undefined) { fn = options; options = {} };
-			if (!(fn instanceof Function)) throw new TypeError(`fn should be a function: fn=${inspect(fn)}`);
+	async do(options = {}, ...pipelineFuncs /*= (a) => {}*/) {
+		// try {
+			if (pipelineFuncs.length < 1) {
+				if (typeof options === 'function') {
+ 					pipelineFuncs.push(options);
+ 					options = {};
+				}
+				else throw new TypeError(`Artefact.do should have at least one pipeline function`);
+			}
 			options = { save: true, ...options };
-			log.verbose(`Running do func on artefact _id=${this._id}`);
-			const r = await fn(this);
-			//if (r) this.set(r);
-			log.verbose(`Artefact do func on artefact _id=${this._id} returned a=${inspect(this)}`);
+			log.verbose(`Running ${pipelineFuncs.length} do funcs on Artefact#${this._id}.do(${inspect(options)})`);
+			// const docPromises = await this.toDocuments();
+				// .map(async docPromise => typeof docPromise.then === 'function' ? await docPromise.then() : docPromise);
+			// log.verbose(`Artefact do func on artefact _id=${this._id} awaiting ${docPromises.length} promises`);
+			// this.setArtefact(await Promise.all(docPromises));
+			await this.resolveArtefact();
+			await Promise.all(pipelineFuncs.map(async fn => {
+				try {
+					this.setArtefact(await fn(await this.toObject()));
+				} catch (e) {
+					var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
+					newError._artefact = this;
+					newError._artefactId = this._id;
+					newError._pipelineFunc = fn;
+					this._errors.push(newError);
+				}
+			 }));
+			log.verbose(`Artefact ${pipelineFuncs.length} do funcs on artefact _id=${this._id} returned a=${inspect(this)}`);
 			if (options.save) {
 				await this.save();
 				log.verbose(`Artefact save for artefact _id=${this._id} returned a=${inspect(this)}`);
@@ -86,22 +151,18 @@ Artefact.prototype = {
 				log.verbose(`Artefact _id=${this._id} do func is not configured to save()`);
 			}
 			return this;
-		} catch (e) {
-			var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
-			newError._artefact = this;
-			newError._artefactId = this._id;
-			throw newError;
-		}
+		// } catch (e) {
+		// 	var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
+		// 	newError._artefact = this;
+		// 	newError._artefactId = this._id;
+		// 	throw newError;
+		// }
 	},
 	
 	async save(options = {}) {
-		await Promise.all((() => {
-			const values = [];
-			const valuesIter = this._docs.values();
-			for (const value of valuesIter)
-				values.push(value);
-			return values;
-		})().map(doc => doc.save()));
+		(await Promise.all(await this.toDocuments()))
+			// .map(async docPromise => typeof docPromise.then === 'function' ? await docPromise.then() : docPromise)
+			.map(async doc => doc && doc.isModified() && await doc.save());
 	},
 	
 	[util.inspect.custom]() {

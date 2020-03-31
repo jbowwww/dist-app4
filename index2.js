@@ -29,18 +29,18 @@ var searches = [
 			async function populate () {
 				await Disk.iterate();
 				await map(searches, async search => {
-					for await (const file of Dir.iterate(search)/*.asArtefacts()*/) {
-						try {
-							await Artefact(file)
-								.with(Audio)
-								.do(({ file, /*fs, dir,*/ audio }) => ({
-									file: file.doHash(),
-									audio: !audio || !audio.hasUpdatedSince(file) && file.path.test(/\.mp3\^/i)
-										? Audio.fromFile(file) : undefined
-								})).save();
-						} catch (e) {
-							debug(`warn for iterate a=${inspect(a)}: ${e.stack||e}`);
-						}
+					for await (const file of Dir.iterate(search)) {
+						await Artefact(file).save()
+						.with(Audio)
+						.do(({ file, /*fs, dir,*/ audio }) => ({
+							file: file.doHash()
+						}), ({ file, /*fs, dir,*/ audio }) => ({
+							audio: !audio
+								 || !audio.isUpdatedSince(file)
+								 &&	file.path.test(/\.mp3\^/i)
+								 ? 	Audio.fromFile(file)
+								 : 	undefined
+						}));
 					}
 				});
 				app.logStats();

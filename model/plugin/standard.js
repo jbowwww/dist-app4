@@ -4,6 +4,7 @@ const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: fal
 const _ = require('lodash');
 const { promisePipe, artefactDataPipe, writeablePromiseStream, chainPromiseFuncs, nestPromiseFuncs, tap, iff, streamPromise }  = require('../../promise-pipe.js');
 const mongoose = require('mongoose');
+const { Document, SchemaTypes } = mongoose;
 
 const plugins = {
 	timestamp: require('./timestamp.js'),
@@ -18,6 +19,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	var discriminatorKey = schema.get('discriminatorKey');
 	// log.debug(`standardSchemaPlugin(): options=${inspect(options)}, schema.obj='${inspect(schema.obj)}'`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 
+	schema.add({
+		'_artefactId': { type: SchemaTypes.ObjectID, required: false, default: undefined }
+	});
 	schema.plugin(plugins.timestamp);	// made my own timestamp plugin because i wanted a checkedAt field, not just create and update. Also has some utility methods.
 	schema.plugin(plugins.customHooks);	// ^ Allows pre and post hooks on any methods (instance and static), instead of just a few like mongoose does by default
 										// Might want to modify it so it only adds hooks for methods when middleware is registered for the method, for performance reasons
@@ -114,7 +118,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.static('construct', function construct(data, cb) {
-		var discriminatorKey = schema.get('discriminatorKey');
+		// var discriminatorKey = schema.get('discriminatorKey');
 		var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
 		var model = discriminator && this.discriminators[discriminator]
 			? this.discriminators[discriminator] : this;
@@ -124,10 +128,22 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
+		if (timestamp instanceof Document)
+			timestamp = timestamp._ts;
 		return 	_.isDate(timestamp) 
 		 &&		!this.isNew
 		 && 	this._ts.checkedAt
 		 && 	this._ts.checkedAt > timestamp;
+	});
+
+	schema.method('isUpdatedSince', function(timestamp) {
+		if (timestamp instanceof Document)
+			timestamp = timestamp._ts;
+		return _.isDate(timestamp)
+		 && 	!this.isNew
+		 && 	((this._ts.updatedAt
+		 && 	this._ts.updatedAt >= timestamp)
+		 || 	(this._ts.checkedAt && this._ts.checkedAt >= timestamp));
 	});
 
 	schema.static('findOrCreate', async function findOrCreate(...args) {
