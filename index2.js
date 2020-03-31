@@ -31,45 +31,43 @@ var searches = [
 				await map(searches, async search => {
 					for await (const file of Dir.iterate(search)) {
 						await Artefact(file).save()
-						.with(Audio)
-						.do(({ file, /*fs, dir,*/ audio }) => ({
-							file: file.doHash()
-						}), ({ file, /*fs, dir,*/ audio }) => ({
-							audio: !audio
-								 || !audio.isUpdatedSince(file)
-								 &&	file.path.test(/\.mp3\^/i)
-								 ? 	Audio.fromFile(file)
-								 : 	undefined
-						}));
 					}
 				});
 				app.logStats();
 			},
 
-			// // TODO: Me next (above should theoretically be ok except need to code .asArtefacts query helper; probs need debugging/correcting)
-			// async function hash () {
-			// 	for await (const a of File.find({ hash: { $exists: false } }).asArtefact()) {	// move that part to a query method on File, and also transform the File doc instance to artefact like { file } or { dir }
-			// 		try {			// /*Limit({ concurrency: 1 },*/ async function (f) {
-			// 			await a.file
-			// 				.doHash()
-			// 				.save({ bulk: true });
-			// 		} catch (e) {
-			// 			debug(`warn for hash: a=${inspect(a)}: ${e.stack||e}`);
-			// 		}
-			// 	}
-			// 	app.logStats();			
-			// },
+			async function hash () {
+				for await (const file of File.find({ hash: { $exists: false } })) {
+					await Artefact(file)
+					.do(({ file }) => file.doHash());
+				}
+				app.logStats();			
+			},
 
 			async function populateAudio() {
-				await Artefact.pipe(
-					File.find({ path: /\.mp3/i }),
-					Audio,
-					async ({ file, audio }) => {
-						log.log(`artefact: ${inspect({ file, audio })}`);
-					}
-				);
-				app.logStats();
+				for await (const file of File.find({ path: /.*\.mp3/i })) {
+					await Artefact(file)
+					.with(Audio)
+					.do(({ file, /*fs, dir,*/ audio }) => ({
+						audio: 	// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
+						 ( !audio || file.isUpdatedSince(audio) )
+						 ? 	Audio.fromFile(file)
+						 : 	undefined
+					}));
+					app.logStats();
+				}
 			}
+
+				// TODO: Test this syntax still?
+				// await Artefact.pipe(
+				// 	File.find({ path: /\.mp3/i }),
+				// 	Audio,
+				// 	async ({ file, audio }) => {
+				// 		log.log(`artefact: ${inspect({ file, audio })}`);
+				// 	}
+				// );
+				// app.logStats();
+
 		);
 	} catch (err) {
 		debug(`Overall cluster error: ${err.stack||err}`);
