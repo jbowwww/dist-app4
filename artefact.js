@@ -73,7 +73,11 @@ Artefact.prototype = { ...Artefact.prototype,
 		this.setArtefact(await /*Promise.all*/(this.toDocuments()));
 	},
 
-	with(...args) { return this.add(...args); },
+	with(...args) { 
+		for (const arg of args)
+			this.add(arg);
+		return this;
+	},
 	add(docOrModel) {
 		let model;
 		if (docOrModel instanceof Document) {
