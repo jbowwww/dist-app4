@@ -49,7 +49,7 @@ var nativeSchema = new mongoose.Schema({
 var audioSchema = new mongoose.Schema({
     format: formatSchema,
     common: commonSchema,
-    native: mongoose.SchemaTypes.Mixed // nativeSchema
+    native: nativeSchema    //v mongoose.SchemaTypes.Mixed
 });
 
 // Note: linking of artefacts should be possible via just _primary and _primaryType
@@ -70,21 +70,22 @@ audioSchema.plugin(require('./plugin/artefact.js'), [ 'file' ], ({ file }) => {
     }
 });
 
-audioSchema.method('loadMetadata', function loadMetadata(file) {
-    var audio = this;
-    var model = this.constructor;
-    console.debug(`audio=${inspectPretty(audio)} file=${inspectPretty(file)}`);
+audioSchema.pre('save', function preSave(cb) {
+
+});
+
+audioSchema.static('loadMetadata', function loadMetadata(file) {
+    console.debug(`loadMetadata(file.path=${inspectPretty(file.path)})`);
     return mm.parseFile(file.path, { native: true }).then(metadata => {
         console.debug(`metadata=${inspectPretty(metadata)}`);
-        audio.updateDocument(metadata);//metadata = metadata;
-        return audio;
+        return new (this)(metadata);
     }).catch(err => {
         var e = new Error( `mm.parseFile('${file.path}'): ${/*err.stack||*/err}`);
         e.stack = err.stack;
         console.warn(e.message);//\nmodel._stats:${inspect(model._stats)}`)
-        model._stats.loadMetadata.errors.push(e);
-        return audio;
-        // throw e;
+        this._stats.loadMetadata.errors.push(e);
+        // return audio;
+        throw e;
     });
 });
 
