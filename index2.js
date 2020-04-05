@@ -36,7 +36,16 @@ var searches = [
 				app.logStats();
 			},
 
-			async function hash () {
+			async function hash () {	// v- wrao the task's (this case hash's) base query ie .find({hash:{exists:false}}
+										// with something like task.progress() and a 2nd parameter is the query to count
+										// number of documents total this task will process i.e. in this case and
+										// would be the right default parameter value: simply an empty .find({})
+										// if you were only hashing mp3s both ,find() base query and total count query
+										// would both include {path:/xxx.?/i} or something but diff would be hash: $exists
+										// that is obviously the exact property the pipeline below sets, is that another
+										// useful abstraction or just superfluous or perhaps just your use cases are simple
+										// at this "early" stage
+										// 299402
 				for await (const file of File.find({ hash: { $exists: false } })) {
 					await Artefact(file)
 					.do(({ file }) => file.doHash());
@@ -51,7 +60,7 @@ var searches = [
 					.do(({ file, /*fs, dir,*/ audio }) => ({
 						audio: 	// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
 						 ( !audio || file.isUpdatedSince(audio) )
-						 ? 	Audio.fromFile(file)
+						 ? 	Audio.loadMetadata(file)
 						 : 	undefined
 					}));
 					app.logStats();
