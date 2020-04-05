@@ -14,7 +14,7 @@ module.exports = Artefact;
  * Artefact(doc, ...extraArgs) where
  * 	doc: a mongoose document to centre the artefact around (may not be significant going forward, just for simplicity's sake for now)
  * 	...extraArgs: mongoose models or docs, or a combination of those. For models specified, it will retrieve
- *  docs from the model's collection where _artefactId = doc._id. FOr docs, associates those docs with
+ *  docs from the model's collection where _artefactId = doc._id(=this._id). FOr docs, associates those docs with
  * 	artefact (by internally setting it's _artefactId)
  * for simple usage inside iteration loops, etc
  * e.g. (TODO)
@@ -34,7 +34,7 @@ function Artefact(doc, ...extraArgs) {
 	for (const extra of [ doc, ...extraArgs ]) {
 		if (extra instanceof Document) {
 			this.add(extra);
-		} else if (extra instanceof Model) {
+		} else if (extra instanceof Model) {	// untested - e.g. not sure .model is member of Model
 			this.add(extra.model, extra.findOne({ _artefactId: this._id }).then((err, doc) => {
 				if (err) throw new Error(err);
 				this.add(extra.model, doc);
@@ -46,8 +46,9 @@ function Artefact(doc, ...extraArgs) {
 	log.info(`Artefact _id=${this._id}=${inspect(this)}`);
 }
 
-Artefact.prototype = { ...Artefact.prototype, 
+Artefact.prototype = {
 
+	...Artefact.prototype, 
 	constructor: Artefact,
 	
 	get(model) {
@@ -62,22 +63,7 @@ Artefact.prototype = { ...Artefact.prototype,
 		log.verbose(`Artefact _id=${this._id}: Setting for model='${model.modelName},${doc instanceof Document && model.baseModelName}' doc=${inspect(doc)}`);
 		return this;
 	},
-	setArtefact(artefact) {
-		if (artefact) {
-			for (const doc of artefact)
-				if (doc) this.add(doc);
-		}
-		return this;
-	},
-	async resolveArtefact() {
-		this.setArtefact(await /*Promise.all*/(this.toDocuments()));
-	},
 
-	with(...args) { 
-		for (const arg of args)
-			this.add(arg);
-		return this;
-	},
 	add(docOrModel) {
 		let model;
 		if (docOrModel instanceof Document) {
@@ -96,30 +82,56 @@ Artefact.prototype = { ...Artefact.prototype,
 		this.set(model, docOrModel);
 		return this;
 	},
-	
-	async toDocuments() {
-		const values = [];
-		const valuesIter = this._docs.values();
-		for (const value of valuesIter)
-			values.push(value);
-		return await Promise.all(values.map(value => Promise.resolve(value)));
+	with(...args) { 
+		for (const arg of args)
+			this.add(arg);
+		return this;
 	},
+
+	// returns { [doc.model.modelName]: mongoose.Document } where key is doc's model name
+	// uses _docs, (so no duplicate entries, all unique
+	async toDocuments() {
+		// const values = [];
+		// const valuesIter = this._docs.values();
+		// for (const value of valuesIter)
+		// 	values.push(Promise.resolve(value));
+		return await Promise.all(
+			Array.from(this._docs.values())
+			.map(value => Promise.resolve(value))
+		);
+	},
+	// returns { [doc.model]: doc }
+	// does docsByType (so duplicate documents potentially, if inherited models used)
 	async toObject() {
 		const r = {};
 		const promises = [];
-		for (const [model, doc] of this._docsByType.entries()) {
+		for (const [model, doc] of 
+		this._docsByType.entries())	{//.map(([model, doc]) => {
 			r[model.modelName] = doc;
-			if (typeof doc.then === 'function') {
-				promises.push(doc.then(
-					realDoc => r[model.modelName] = realDoc
-				));
-			}
+			promises.push(Promise.resolve(doc).then(
+				realDoc => r[model.modelName] = realDoc
+			));
 		}
-		await Promise.all(promises);
+		// await Promise.all(promises);
 		log.verbose(`Artefact _id=${this._id} toObject=${inspect(r)}`);
 		return r;
 	},
 
+	// accepts an object, each value individually may be a mongoose.Document or a promise for one
+	async setArtefact(artefact = null) {
+		const origArg = artefact;
+		if (!artefact) artefact = this.toDocuments();
+		log.verbose(`Artefact _id=${this._id}.setArtefact(${inspect(origArg)})${!!origArg?'':(': set artefact='+inspect(artefact))}`);
+		for /*await*/ (const doc of Object.values(artefact))
+			if (doc) this.add(await doc);
+		return this;
+	},
+
+	// Perforns async function(s) on this constructed Artefact
+	// functions if>1 are run in parallel, with individual try/catch blocks to report any function errors as warnings concerning a specific item(artefact)
+	// Each function takes and returns a POJO representation of this artefact, keyed by model names (so discrimated docs will be duplicated with base/inherited model anems)
+	// which is then "merged" (aka setArtefact) back into this artefact. Each individual property on returned object
+	// can be a promise for or an actual mongoose document
 	async do(options = {}, ...pipelineFuncs /*= (a) => {}*/) {
 		// try {
 			if (pipelineFuncs.length < 1) {
@@ -131,20 +143,16 @@ Artefact.prototype = { ...Artefact.prototype,
 			}
 			options = { save: true, ...options };
 			log.verbose(`Running ${pipelineFuncs.length} do funcs on Artefact#${this._id}.do(${inspect(options)})`);
-			// const docPromises = await this.toDocuments();
-				// .map(async docPromise => typeof docPromise.then === 'function' ? await docPromise.then() : docPromise);
-			// log.verbose(`Artefact do func on artefact _id=${this._id} awaiting ${docPromises.length} promises`);
-			// this.setArtefact(await Promise.all(docPromises));
-			await this.resolveArtefact();
 			await Promise.all(pipelineFuncs.map(async fn => {
 				try {
-					this.setArtefact(await fn(await this.toObject()));
+					await this.setArtefact(await fn(await this.toObject()));
 				} catch (e) {
 					var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
 					newError._artefact = this;
 					newError._artefactId = this._id;
 					newError._pipelineFunc = fn;
 					this._errors.push(newError);
+					log.warn(newError);
 				}
 			 }));
 			log.verbose(`Artefact ${pipelineFuncs.length} do funcs on artefact _id=${this._id} returned a=${inspect(this)}`);
@@ -170,7 +178,7 @@ Artefact.prototype = { ...Artefact.prototype,
 	},
 	
 	[util.inspect.custom]() {
-		return inspect(this._docsByType);//{ _id: this._id, ...Object.fromEntries(this._docsByType.entries()) });//Object.fromEntries([ [ '_id', this._id ], ...this._docsByType.entries() ]));
+		return inspect(this._docsByType, { maxDepth: 3 });//{ _id: this._id, ...Object.fromEntries(this._docsByType.entries()) });//Object.fromEntries([ [ '_id', this._id ], ...this._docsByType.entries() ]));
 	}
 
 };
