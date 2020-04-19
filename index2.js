@@ -1,5 +1,5 @@
 "use strict";
-const debug = require('@jbowwww/log');//('index')
+const log = require('@jbowwww/log');//('index')
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
 const { map } = require('@jbowwww/promise');
@@ -26,6 +26,29 @@ var searches = [
 		await app.dbConnect();
 		await clusterProcesses(
 
+			async function findV1Files() {
+				for await (const v1group of
+					File.aggregate()
+					.match({ path: /.*\.v1/i })
+					.lookup({
+						from: "fs",
+						localField: "hash",
+						foreignField: "hash",
+						as: 'groupMatches'
+					 })
+					.group({ _id: { path: '$path', hash: '$hash' }, count: { $sum: 1 }, dupes: { $push: '$root' }}))
+				{
+					log.info(`v1 group: ${inspect(v1group)}`);
+					// await Artefact(file)
+					// .where({ hash: { $ne: null }})
+					// .groupBy({ hash: 1 })
+					// .do (({ file }) => {
+					// 	if (file.hash) ;
+					// });
+				}
+				app.logStats();
+			}
+/*
 			async function populate () {
 				await Disk.iterate();
 				await map(searches, async search => {
@@ -57,7 +80,7 @@ var searches = [
 				for await (const file of File.find({ path: /.*\.mp3/i })) {
 					await Artefact(file)
 					.with(Audio)
-					.do(({ file, /*fs, dir,*/ audio }) => ({
+					.do(({ file, audio }) => ({
 						audio: 	// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
 						 ( !audio || file.isUpdatedSince(audio) )
 						 ? 	Audio.loadMetadata(file)
@@ -66,7 +89,7 @@ var searches = [
 					app.logStats();
 				}
 			}
-
+*/
 				// TODO: Test this syntax still?
 				// await Artefact.pipe(
 				// 	File.find({ path: /\.mp3/i }),
@@ -79,7 +102,7 @@ var searches = [
 
 		);
 	} catch (err) {
-		debug(`Overall cluster error: ${err.stack||err}`);
+		log(`Overall cluster error: ${err.stack||err}`);
 	}	
 }) ();
 
