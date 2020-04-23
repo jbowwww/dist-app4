@@ -1,0 +1,17 @@
+version: '3'
+services:
+  plex:
+    image: 'mongo'
+    restart: always
+    hostname: 'mongo-artefacts'
+    environment:
+      TZ: 'Australia/Perth'
+      PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+      TERM: 'xterm'
+      LANG: 'C.UTF-8'
+      LC_ALL: 'C.UTF-8'
+    ports:
+      - '27017:27017'
+    network_mode: "bridge"
+    container_name: "mongo-artefacts"
+

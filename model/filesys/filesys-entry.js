@@ -32,7 +32,8 @@ var fsEntry = new mongoose.Schema({
 	path: { type: String, unique: true, index: true, required: true }, 
 	dir: { type: mongoose.SchemaTypes.ObjectId, ref: 'dir' },
 	partition: { type: mongoose.SchemaTypes.ObjectId, ref: 'partition' },
-	stats: { type: statSchema, required: false/*true, default: null*/ }
+	stats: { type: statSchema, required: false/*true, default: null*/ },
+	fileType: { type: mongoose.SchemaTypes.String, required: false }
 }, {
 	discriminatorKey: 'fileType',
 	defaultFindQuery: { path: undefined },
@@ -46,8 +47,7 @@ fsEntry.static('findOrCreate', async function findOrCreate(path, dir) {
 	if (typeof path !== 'string') throw new TypeError(`fsEntry.findOrCreate(): path should be a String but is a '${typeof path}'`);
 	const stats = await nodeFs.lstat(path);
 	// if (!dir) {
-	// 	/* TODO: try to query db for parent dir?? */
-	// dir = nodePath.dirname(path);
+	// dir = nodePath.dirname(path);	
 	// }
 	if (dir instanceof mongoose.Document)
 		dir = dir._id;

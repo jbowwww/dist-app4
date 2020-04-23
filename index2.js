@@ -15,7 +15,7 @@ const Artefact = require('./artefact.js');
 
 var searches = [
 	// { path: '/home/jk/code/dist-app4', maxDepth: 0, progress: true },
-	{ path: '/mnt/media', maxDepth:                   0, progress: true },
+	{ path: '/mnt/Trapdoor/media/image', maxDepth:                   0, progress: true },
 	// { path: '/mnt/mystuff', maxDepth: 0 }
 	// { path: '/', maxDepth: 0, filter: dirEntry => (!['/proc', '/sys', '/lib', '/lib64', '/bin', '/boot', '/dev' ].includes(dirEntry.path)) }
 ];
@@ -47,9 +47,9 @@ var searches = [
 					// });
 				}
 				app.logStats();
-			}
-/*
-			async function populate () {
+			},
+
+			async function populate (/*{ includeDisks } = { includeDisks: true }*/) {
 				await Disk.iterate();
 				await map(searches, async search => {
 					for await (const file of Dir.iterate(search)) {
@@ -58,7 +58,7 @@ var searches = [
 				});
 				app.logStats();
 			},
-
+/*
 			async function hash () {	// v- wrao the task's (this case hash's) base query ie .find({hash:{exists:false}}
 										// with something like task.progress() and a 2nd parameter is the query to count
 										// number of documents total this task will process i.e. in this case and
@@ -75,7 +75,7 @@ var searches = [
 				}
 				app.logStats();			
 			},
-
+*/
 			async function populateAudio() {
 				for await (const file of File.find({ path: /.*\.mp3/i })) {
 					await Artefact(file)
@@ -89,7 +89,7 @@ var searches = [
 					app.logStats();
 				}
 			}
-*/
+
 				// TODO: Test this syntax still?
 				// await Artefact.pipe(
 				// 	File.find({ path: /\.mp3/i }),

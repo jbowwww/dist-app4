@@ -120,8 +120,9 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.static('construct', function construct(data, cb) {
 		// var discriminatorKey = schema.get('discriminatorKey');
 		var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
-		var model = discriminator && this.discriminators[discriminator]
-			? this.discriminators[discriminator] : this;
+		var model = discriminatorKey && this.discriminators[discriminatorKey]
+			? this.discriminators[discriminatorKey]
+		 	: this;
 		return new (model)(data);
 		cb(data);
 	});
@@ -179,7 +180,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			// await r.save();
 		}
 		else {
-			r = await model.construct(data);//new model(data));
+			r = await new model(data);//model.construct(data)
 		}
 		// if (options.saveImmediate)
 		// r = await r.save();

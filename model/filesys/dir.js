@@ -10,9 +10,13 @@ const FsEntry = require('./filesys-entry.js');
 let dirSchema = new mongoose.Schema({ }, { defaultFindQuery: { path: undefined } });
 
 dirSchema.static('iterate', async function* iterate(options = {}) {
-	const newDoc = await this.findOrCreate(options.path);
-	yield newDoc;
-	yield* newDoc.iterate({ ...options, path: undefined });
+	try {
+		const newDoc = await this.findOrCreate(options.path);
+		yield newDoc;
+		yield* newDoc.iterate({ ...options, path: undefined });
+	} catch (e) {
+		debug.error(`Error creating top level Dir to .iterate(): ${e.stack||e}`)
+	}
 });
 
 dirSchema.method('iterate', async function* iterate(options = {}) {
