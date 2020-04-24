@@ -30,15 +30,12 @@ dirSchema.method('iterate', async function* iterate(options = {}) {
 	debug(`dir.iterate(): this=${inspect(this)} options=${inspect(options)}`);
 	try {
 		for await (const newDoc of this.read()) {
-			if (!options.filter || await options.filter(newDoc)) {
-				yield newDoc;
-				if (newDoc instanceof this.constructor && (!options.maxDepth || options.maxDepth > 0)) {
-					yield* newDoc.iterate({
-						...options,
-						maxDepth: options.maxDepth instanceof Number ? options.maxDepth - 1 : undefined 
-					});
-				}
-			}
+			if (typeof options.filter === 'function' && !(await options.filter(newDoc)))
+				continue;
+			yield newDoc;
+			if (!(newDoc instanceof this.constructor) || (options.maxDepth && options.maxDepth-- === 0))
+				continue;
+			yield* newDoc.iterate(options);
 		}
 	} catch (err) {
 		if (typeof options.handleError === 'function')
@@ -49,8 +46,9 @@ dirSchema.method('iterate', async function* iterate(options = {}) {
 
 dirSchema.method('read', async function* read() {
 	for /*await*/ (const dirent of (await nodeFs.readdir/*opendir*/(this.path))) {
-		if (dirent != '.' && dirent != '..')
-			yield await FsEntry.findOrCreate(nodePath.join(this.path, dirent/*.name*/), this._id);
+		if (dirent == '.' || dirent == '..')
+			continue;
+		yield await FsEntry.findOrCreate(nodePath.join(this.path, dirent/*.name*/), this._id);
 	}
 });
 

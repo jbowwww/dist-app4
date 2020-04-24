@@ -57,7 +57,6 @@ fsEntry.static('findOrCreate', async function findOrCreate(path, dir) {
 		stats,
 		fileType: stats.isDirectory() ? 'dir' : stats.isFile() ? 'file' : 'unknown'
 	});
-	log.debug(`FsEntry.findOrCreate(): returning ${inspect(fsEntry)}`);
 	return fsEntry;
 });
 

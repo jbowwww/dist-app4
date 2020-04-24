@@ -1,5 +1,5 @@
 "use strict";
-const debug = require('@jbowwww/log');//('model/filesys/disk');
+const log = require('@jbowwww/log').disable('debug');//('model/filesys/disk');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const { promisifyMethods } = require('../../utility.js');
 const _ = require('lodash');
@@ -29,12 +29,9 @@ disk.plugin(require('../plugin/artefact.js'));
 
 disk.static('iterate', async function iterate(task) {
 	var model = this;
-	var debugPrefix = `[model ${model.modelName}].iterate()`;
 	var dbOpt = { saveImmediate: true };
-	
 	const jsonDevices = await getDevices();
-	debug(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
-
+	log.debug(`[model ${model.modelName}].iterate(): jsonDevices=${inspect(jsonDevices)}`);
 	try {
 		await map(jsonDevices, async disk => {
 			const diskDoc = await model.findOrCreate(disk, dbOpt);
@@ -47,7 +44,7 @@ disk.static('iterate', async function iterate(task) {
 				 		container: containerPartitionDoc
 				 	};
 				 	const partitionDoc = await Partition.findOrCreate(partition, dbOpt);
-					debug(`partitionDoc=${inspect(partitionDoc)}`);	// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
+					log.debug(`partitionDoc=${inspect(partitionDoc)}`);	// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
 					var mp = await mapPartitions(partition, partitionDoc);
 					return mp;
 				}))
@@ -55,7 +52,7 @@ disk.static('iterate', async function iterate(task) {
 		});
 		await null;
 	} catch (e) {
-		console.error(`disk.iterate: error: ${e.stack||e}`);
+		log.error(`disk.iterate: error: ${e.stack||e}`);
 		model._stats.iterate.errors.push(e);
 	}
 });
@@ -66,7 +63,7 @@ disk.static('getPartitionForPath', function getPartitionForPath(path) {
 				_.filter(disks, disk => typeof disk.mountpoint === 'string'),
 				disk => disk.mountpoint.length ),
 			disk => path.startsWith(disk.mountpoint));
-		console.verbose(`disk=${inspect(disk)} disks=${inspect(disks)}`);
+		// log.debug(`disk=${inspect(disk)} disks=${inspect(disks)}`);
 		return disk;
 	});
 })
