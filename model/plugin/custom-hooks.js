@@ -41,11 +41,11 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 				const modelName = model.modelName;
 				try {
 					let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, model, args)
-					log.verbose(`[model ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[model ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					result = await fn.apply(model, args);
-					log.verbose(`[model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					result = await schemaHooksExecPost(name, model, [ result ]/*, { error: undefined }*/);
-					log.verbose(`[model ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[model ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					return result;
 				} catch (err) {
 					log.warn(` ## [model ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${err.stack||err}`);
@@ -77,11 +77,11 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 				const modelName = model.modelName;
 				try {
 					let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, doc, args); 
-					log.verbose(`[doc ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[doc ${modelName}].pre('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					result = await fn.apply(doc, args);
-					log.verbose(`[doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					result = await schemaHooksExecPost(name, doc, [ result ]/*, { error: undefined }*/);
-					log.verbose(`[doc ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
+					log.debug(`[doc ${modelName}].post('${name}', ${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): result=${inspect(result)}`);
 					return result;
 				} catch (e) {
 					log.warn(` ## [doc ${modelName}].${name}(${_.join(_.map(args, arg => inspect(arg, { compact: true }), ', '))}): rejected execPost: ${e.stack||err}`);
