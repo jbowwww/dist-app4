@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log').disable('debug');
+const log = require('@jbowwww/log');
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const { EventEmitter } = require('events');
@@ -29,18 +29,18 @@ function Artefact(doc, ...extraArgs) {
 	this._docs = new Set();
 	this._docsByType = new Map();
 	this._errors = [];
-	log.verbose(`Constructing Artefact _id=${this._id} from doc=${inspect(doc)}`);
 	
-	for (const extra of [ doc, ...extraArgs ]) {
-		if (extra instanceof Document) {
-			this.add(extra);
-		} else if (extra instanceof Model) {	// untested - e.g. not sure .model is member of Model
-			this.add(extra.model, extra.findOne({ _artefactId: this._id }).then((err, doc) => {
-				if (err) throw new Error(err);
-				this.add(extra.model, doc);
-			}));
-			log.verbose(`Artefact _id=${this._id}: querying model='${extra.modelName}, types= ${extra.modelName}, ${extra.baseModelName}`);
-		}
+	for (const arg of [ doc, ...extraArgs ]) {
+		this.add(arg);
+		// if (extra instanceof Document) {
+		// 	this.add(extra);
+		// } else if (extra instanceof Model) {	// untested - e.g. not sure .model is member of Model
+		// 	this.add(extra.model, extra.findOne({ _artefactId: this._id }).then((err, doc) => {
+		// 		if (err) throw new Error(err);
+		// 		this.add(extra.model, doc);
+		// 	}));
+		// 	log.verbose(`Artefact _id=${this._id}: querying model='${extra.modelName}, types= ${extra.modelName}, ${extra.baseModelName}`);
+		// }
 	}
 
 	log.info(`Artefact _id=${this._id}=${inspect(this)}`);
@@ -70,14 +70,19 @@ Artefact.prototype = {
 			model = docOrModel.constructor;
 		} else if (typeof docOrModel === 'function'/* && docOrModel.name === 'Model'*/) {
 			model = docOrModel;
-			docOrModel = model.findOne();
+			docOrModel = model.findOne({
+				_artefactId: this._id
+			});//.then(doc => this.add(model, doc));
 		} else if (docOrModel instanceof Query) {
 			model = docOrModel.model;
+			docOrModel.setQuery({
+				...docOrModel.getFilter(),
+				_artefactId: this._id
+			});//.then(doc => this.add(model, doc));
 		} else {
-			throw new TypeError(`docOrModel should be a Document or Model but is=${typeof docOrModel} ${inspect(docOrModel)}`);
+			throw new TypeError(`docOrModel should be a Document, Model(function) or Query but is=${typeof docOrModel} ${inspect(docOrModel)}`);
 		}
 		if (docOrModel instanceof Query) {
-			docOrModel.setQuery({ ...docOrModel.getFilter(), _artefactId: /*SchemaTypes.ObjectId*/(this._id) });
 		}
 		this.set(model, docOrModel);
 		return this;
@@ -97,7 +102,7 @@ Artefact.prototype = {
 		// 	values.push(Promise.resolve(value));
 		return await Promise.all(
 			Array.from(this._docs.values())
-			.map(value => Promise.resolve(value))
+			.map(value => Promise.resolve(value)) // unnecessary? wouldn't Promise.all just internally Promise.resolve any immediate _docs.values() ?
 		);
 	},
 	// returns { [doc.model]: doc }
@@ -105,25 +110,26 @@ Artefact.prototype = {
 	async toObject() {
 		const r = {};
 		const promises = [];
-		for (const [model, doc] of 
-		this._docsByType.entries())	{//.map(([model, doc]) => {
+		for (const [model, doc] of this._docsByType.entries())	{//.map(([model, doc]) => {
 			r[model.modelName] = doc;
 			promises.push(Promise.resolve(doc).then(
 				realDoc => r[model.modelName] = realDoc
 			));
 		}
-		// await Promise.all(promises);
-		log.verbose(`Artefact _id=${this._id} toObject=${inspect(r)}`);
+		await Promise.all(promises);
+		log.debug(`Artefact _id=${this._id} toObject=${inspect(r)}`);
 		return r;
 	},
 
-	// accepts an object, each value individually may be a mongoose.Document or a promise for one
+	// accepts an artefact object, each value individually may be a mongoose.Document or a promise for one
 	async setArtefact(artefact = null) {
 		const origArg = artefact;
-		if (!artefact) artefact = this.toDocuments();
-		log.verbose(`Artefact _id=${this._id}.setArtefact(${inspect(origArg)})${!!origArg?'':(': set artefact='+inspect(artefact))}`);
-		for /*await*/ (const doc of Object.values(artefact))
+		if (!artefact) artefact = await this.toDocuments();
+		log.debug(`Artefact _id=${this._id}.setArtefact(${inspect(origArg)})${!!origArg?'':(': set artefact='+inspect(artefact))}`);
+		for /*await*/ (const doc of Object.values(artefact)) {
+			log.debug(`Artefact _id=${this._id}.setArtefact(${inspect(origArg)})${!!origArg?'':(': set artefact.doc='+inspect(doc))}`);
 			if (doc) this.add(await doc);
+		}
 		return this;
 	},
 
@@ -156,12 +162,10 @@ Artefact.prototype = {
 				}
 			 }));
 			log.verbose(`Artefact ${pipelineFuncs.length} do funcs on artefact _id=${this._id} returned a=${inspect(this)}`);
-			if (options.save) {
+			if (options.save)
 				await this.save();
-				log.verbose(`Artefact save for artefact _id=${this._id} returned a=${inspect(this)}`);
-			} else {
+			else
 				log.verbose(`Artefact _id=${this._id} do func is not configured to save()`);
-			}
 			return this;
 		// } catch (e) {
 		// 	var newError = new Error(`Artefact.do exception for _artefact=${inspect(this)}: ${e.stack||e}`);
@@ -172,6 +176,7 @@ Artefact.prototype = {
 	},
 	
 	async save(options = {}) {
+		log.verbose(`Artefact save for artefact _id=${this._id} returned a=${inspect(this)}`);
 		(await Promise.all(await this.toDocuments()))
 			// .map(async docPromise => typeof docPromise.then === 'function' ? await docPromise.then() : docPromise)
 			.map(async doc => doc && doc.isModified() && await doc.save());

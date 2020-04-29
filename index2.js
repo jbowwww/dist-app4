@@ -53,12 +53,12 @@ var searches = [
 				await Disk.iterate();
 				await map(searches, async search => {
 					for await (const file of Dir.iterate(search)) {
-						await Artefact(file).save()
+						await Artefact(file).save();
 					}
 				});
 				app.logStats();
 			},
-/*
+
 			async function hash () {	// v- wrao the task's (this case hash's) base query ie .find({hash:{exists:false}}
 										// with something like task.progress() and a 2nd parameter is the query to count
 										// number of documents total this task will process i.e. in this case and
@@ -70,21 +70,17 @@ var searches = [
 										// at this "early" stage
 										// 299402
 				for await (const file of File.find({ hash: { $exists: false } })) {
-					await Artefact(file)
-					.do(({ file }) => file.doHash());
+					await Artefact(file).do(({ file }) => ({ file: file.doHash() }));
 				}
 				app.logStats();			
 			},
-*/
+
 			async function populateAudio() {
 				for await (const file of File.find({ path: /.*\.mp3/i })) {
-					await Artefact(file)
-					.with(Audio)
-					.do(({ file, audio }) => ({
+					await Artefact(file).with(Audio).do(({ file, audio }) => ({
 						audio: 	// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
 						 ( !audio || file.isUpdatedSince(audio) )
-						 ? 	Audio.loadMetadata(file)
-						 : 	undefined
+						 ? 	Audio.loadMetadata(file) : audio
 					}));
 					app.logStats();
 				}
