@@ -34,16 +34,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 										// hooks is necessary, it just creates stat entries, and creates schema method wrappers that increase stat counters
 	schema.plugin(plugins.trackedMethods, trackedMethods);	// track some method stats
 
-	// schema.static('construct', function construct(data, cb) {
-	// 	// var discriminatorKey = schema.get('discriminatorKey');
-	// 	var discriminator = discriminatorKey ? data[discriminatorKey] : undefined;
-	// 	var model = discriminatorKey && this.discriminators[discriminatorKey]
-	// 		? this.discriminators[discriminatorKey]
-	// 	 	: this;
-	// 	return new (model)(data);
-	// 	cb(data);
-	// });
-
+	schema.pre('save', function(/*doc, */next) {
+		const action = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
+		this.constructor._stats[action]++; 
+	});
 	
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
 		if (timestamp instanceof Document)
@@ -94,14 +88,15 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		else log.verbose(`[model ${model.modelName}].findOrCreate(): doc not found, creating with data=${inspect(data)};`); 		//(dk(${discriminatorKey})=${data[discriminatorKey]})
 		if (r) {
 			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
-			// await r.save();
+			model._stats.findOrCreate[r.isModified() ? 'update' : 'check']++;
 		}
 		else {
-			r = await new model(data);//model.construct(data)
+			r = new model(data);
+			model._stats.findOrCreate['create']++;
 		}
-		// if (options.saveImmediate)
-		// r = await r.save();
-		log.debug(`[model ${model.modelName}.findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+		if (r && options.saveImmediate)
+			r = await r.save();
+		// log.debug(`[model ${model.modelName}.findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
 		return r;
 	});
 

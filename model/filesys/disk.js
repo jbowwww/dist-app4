@@ -1,10 +1,10 @@
 "use strict";
-const log = require('@jbowwww/log').disable('debug');//('model/filesys/disk');
+const log = require('@jbowwww/log');//.disable('debug');//('model/filesys/disk');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const { promisifyMethods } = require('../../utility.js');
 const _ = require('lodash');
 const mongoose = require('mongoose');
-const { map } = require('@jbowwww/promise');
+const { map: promiseMap } = require('@jbowwww/promise');
 const getDevices = require('../../fs/devices.js');
 const { Partition } = require('./index.js');//mongoose.model('partition');// require('./partition.js');
 
@@ -27,37 +27,40 @@ disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // disk.plugin(require('../plugin/stat.js'), [ 'iterate' ]);
 
-disk.static('iterate', async function iterate(task) {
-	var model = this;
-	var dbOpt = { saveImmediate: true };
-	const jsonDevices = await getDevices();
-	log.debug(`[model ${model.modelName}].iterate(): jsonDevices=${inspect(jsonDevices)}`);
-	try {
-		await map(jsonDevices, async disk => {
-			const diskDoc = await model.findOrCreate(disk, dbOpt);
-			await (async function mapPartitions(container, containerPartitionDoc) {
-			 (	!container || !container.children ? null
-			 : 	await map(container.children, async partition => {
-				 	partition = {
-				 		...partition,
-				 		disk: diskDoc,
-				 		container: containerPartitionDoc
-				 	};
-				 	const partitionDoc = await Partition.findOrCreate(partition, dbOpt);
-					log.debug(`partitionDoc=${inspect(partitionDoc)}`);	// diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
-					var mp = await mapPartitions(partition, partitionDoc);
-					return mp;
-				}))
-			})(disk);
-		});
-		await null;
-	} catch (e) {
-		log.error(`disk.iterate: error: ${e.stack||e}`);
-		model._stats.iterate.errors.push(e);
-	}
+disk.static('populate', async function iterate(task) {
+		var model = this;
+		var debugPrefix = `[model ${model.modelName}].populate()`;
+		var dbOpt = { saveImmediate: true };
+		
+		const jsonDevices = await getDevices();
+		log.debug(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
+
+		try {
+			await promiseMap(jsonDevices, async disk => {
+				const diskDoc = await model.findOrCreate(disk, dbOpt);
+				await (async function mapPartitions(container, containerPartitionDoc) {
+					  (!container || !container.children ? null
+				 : 	await promiseMap(container.children, async partition => {
+						partition = {
+								...partition,
+								disk: diskDoc,
+								container: containerPartitionDoc
+						};
+						const partitionDoc = await Partition.findOrCreate(partition, dbOpt);
+						log.debug(`partitionDoc=${inspect(partitionDoc)}`); // diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
+						var mp = await mapPartitions(partition, partitionDoc);
+						return mp;
+					}))
+				})(disk);
+			});
+			await null;
+		} catch (e) {
+				console.error(`disk.iterate: error: ${e.stack||e}`);
+				model._stats.iterate.errors.push(e);
+		}
 });
 
-disk.static('getPartitionForPath', function getPartitionForPath(path) {
+disk.static('getDiskForPath', function getDiskForPath(path) {
 	return this.find().then(disks => {
 		var disk =_.find(_.sortBy(
 				_.filter(disks, disk => typeof disk.mountpoint === 'string'),

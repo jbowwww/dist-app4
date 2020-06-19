@@ -54,6 +54,12 @@ file.method('doHash', function doHash(forceRehash = false) {
 	}
 });
 
+file.query.noCursorTimeout = function cursorNoTimeout() {
+	const c = this.cursor();
+	c.addCursorFlag('noCursorTimeout', true);
+	return c;
+}
+
 file.query.hasHash = function() { return this.exists('hash'); };
 
 file.query.doHashes = async function(rehashAll = false) {

@@ -2,7 +2,7 @@
 const log = require('@jbowwww/log').disable('debug');//('index')
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: true });
 const util = require('util');
-const { map } = require('@jbowwww/promise');
+const { map: promiseMap } = require('@jbowwww/promise');
 const clusterProcesses = require('@jbowwww/cluster-processes');
 
 const app = require('./app.js');
@@ -50,14 +50,28 @@ var searches = [
 			// },
 
 			async function populate (/*{ includeDisks } = { includeDisks: true }*/) {
-				for await (const storage of Disk.iterate()) {
-					await Artefact(storage).save();
-				}
-				await map(searches, async search => {
-					for await (const file of Dir.iterate(search)) {
-						await Artefact(file).save();
+				log.info(`Iterating disks...`);
+				await Disk.populate();
+				log.info('Starting directory searches...');
+				await promiseMap( await Disk.find({
+					"mountpoint": 	{ "$exists": true },
+					"$expr": 		{ "$gt": [ { "$strLenCP": "$mountpoint" }, 0 ] }
+				}), async disk => {
+					log.info(`Checking if disk is mounted for disk=${inspect(disk)}`);
+					if (typeof disk.mountpoint === 'string' && disk.mountpoint.length > 0) {
+						const searchesForDisk = searches.filter(search => search.path.startsWith(disk.mountpoint));
+						log.info(`Starting ${searchesForDisk.length} searches on disk at \'${disk.mountpoint}\'`);
+						for (const search of searchesForDisk) {
+							log.info(`Started search for path \'${search.path}\'`);
+							for await (const file of Dir.iterate(search)) {
+								await Artefact(file).save();
+							}
+							log.info(`Finished search for path \'${search.path}\'`);
+						}
+						log.info(`Finished all searches on disk at \'${disk.mountpoint}\'`);
 					}
 				});
+				log.info('Finished all searches for all disks');
 				app.logStats();
 			},
 
@@ -82,9 +96,9 @@ var searches = [
 			async function populateAudio() {
 				for await (const file of File.find({ path: /.*\.mp3/i })) {
 					await Artefact(file).with(Audio).do(
-						({ file, audio }) => ({ audio: 	// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
-						 ( !audio || file.isUpdatedSince(audio) )
-						 ? 	Audio.loadMetadata(file) : audio
+						({ file, audio }) => ({		// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
+							audio:	( !audio || file.isUpdatedSince(audio) )
+						 			?  Audio.loadMetadata(file) : audio
 					}));
 					app.logStats();
 				}
