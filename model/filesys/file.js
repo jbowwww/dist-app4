@@ -1,5 +1,5 @@
 "use strict";
-const debug = require('@jbowwww/log');//('model/filesys/file');
+const debug = require('@jbowwww/log').disable('debug');
 const console = require('../../stdio.js').Get('model/filesys/file', { minLevel: 'verbose' });	// log verbose debug
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const inspectPretty = require('../../utility.js').makeInspect({ depth: 2, compact: false });

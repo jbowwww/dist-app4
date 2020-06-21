@@ -50,8 +50,17 @@ var searches = [
 			// },
 
 			async function populate (/*{ includeDisks } = { includeDisks: true }*/) {
+				// await app.dbConnect();
 				log.info(`Iterating disks...`);
-				await Disk.populate();
+				const { disks, partitions } = await Disk.populate();
+				for (const disk of disks) {
+					log.verbose(`Saving disk: ${inspect(disk)}`);
+					await disk.save();
+				}
+				for (const part of partitions) {
+					log.verbose(`Saving partition: ${inspect(part)}`);
+					await part.save();
+				}
 				log.info('Starting directory searches...');
 				await promiseMap( await Disk.find({
 					"mountpoint": 	{ "$exists": true },

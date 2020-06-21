@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const _ = require('lodash');
@@ -27,7 +27,7 @@ module.exports = function statSchemaPlugin(schema, options) {
 	_.assign(schema._stats, schema._stats || {}, options);
 
 	function initModelStats(model) {
-		log.verbose(`[model ${model.modelName}].on('init') schema._stats=${inspect(schema._stats)}`);//options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
+		log.debug(`[model ${model.modelName}].on('init') schema._stats=${inspect(schema._stats)}`);//options=${inspect(options)}`);	//, schema.prototype=${inspect(schema.prototype)}, this=${inspect(this)}`);
 		Object.defineProperty(model, '_stats', { enumerable: true, writeable: true, configurable: true, value: _.create({
 			[util.inspect.custom]: function() {
 				return _.pickBy(this, (v, k) => 

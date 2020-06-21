@@ -37,6 +37,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	schema.pre('save', function(/*doc, */next) {
 		const action = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
 		this.constructor._stats[action]++; 
+		next();
 	});
 	
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
@@ -59,6 +60,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.static('findOrCreate', async function findOrCreate(...args) {
+	try {
 		var cb, query, data, model = this, options = {
 			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
 			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
@@ -94,10 +96,16 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			r = new model(data);
 			model._stats.findOrCreate['create']++;
 		}
-		if (r && options.saveImmediate)
-			r = await r.save();
-		// log.debug(`[model ${model.modelName}.findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+		if (r && options.saveImmediate) {
+			const r2 = await r.save();
+			r = r2;
+		}
+		log.verbose(`[model ${model.modelName}].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
 		return r;
+	} catch (e) {
+		console.error(`[model ${model.modelName}].findOrCreate(): ERROR: ${e.message}`);
+		throw e;
+	}
 	});
 
 

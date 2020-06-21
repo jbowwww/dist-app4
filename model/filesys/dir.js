@@ -1,5 +1,5 @@
 "use strict";
-const debug = require('@jbowwww/log');//('model/filesys/dir');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const nodeFs = require('fs').promises;
 const nodePath = require('path');
@@ -15,7 +15,7 @@ dirSchema.static('iterate', async function* iterate(options = {}) {
 		yield newDoc;
 		yield* newDoc.iterate({ ...options, path: undefined });
 	} catch (e) {
-		debug.error(`Error creating top level Dir to .iterate(): ${e.stack||e}`)
+		log.error(`Error creating top level Dir to .iterate(): ${e.stack||e}`)
 	}
 });
 
@@ -27,7 +27,7 @@ dirSchema.method('iterate', async function* iterate(options = {}) {
 		handleError(err) { console.warn(`iterate: ${err/*.stack*/}`); },
 		...options
 	};
-	debug(`dir.iterate(): this=${inspect(this)} options=${inspect(options)}`);
+	log.info(`dir.iterate(): this=${inspect(this)} options=${inspect(options)}`);
 	try {
 		for await (const newDoc of this.read()) {
 			if (typeof options.filter === 'function' && !(await options.filter(newDoc)))
@@ -54,4 +54,4 @@ dirSchema.method('read', async function* read() {
 
 module.exports = FsEntry.discriminator('dir', dirSchema);
 
-debug(`Dir: ${inspect(module.exports)}, Dir.prototype: ${inspect(module.exports.prototype)}`);
+log.debug(`Dir: ${inspect(module.exports)}, Dir.prototype: ${inspect(module.exports.prototype)}`);

@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//('model/filesys/filesys-entry');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const nodeFs = require('fs').promises;
 const nodePath = require('path');

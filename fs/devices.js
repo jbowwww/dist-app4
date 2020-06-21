@@ -1,16 +1,13 @@
 "use strict";
 
-const console = require('@jbowwww/log');
+const log = require('@jbowwww/log');
 const inspect = require('../utility.js').makeInspect({ depth: 2, breakLength: 0 });
-const util = require('util');
-const exec = util.promisify(require('child_process').exec)
+const { cmd } = require('@jbowwww/shell');
 
 module.exports = async function getDevices() {
-	try {
-		const cmd = 'lsblk -JO';
-		const devices = JSON.parse(stdout).blockdevices;
-		console.verbose(`getDevices(): devices = ${inspect(devices)}`);
-		return devices;
-	} catch (e) {
-		
+	const { stdout, stderr } = await cmd('lsblk -JO');
+	log.debug(`stdout='${stdout}' stderr='${stderr}'`);
+	const devices = JSON.parse(stdout).blockdevices;
+	log.debug(`getDevices(): devices = ${inspect(devices)}`);
+	return devices;
 };

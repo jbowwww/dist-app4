@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//.disable('debug');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const { EventEmitter } = require('events');

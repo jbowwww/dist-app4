@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//.disable('debug');//('model/filesys/disk');
+const log = require('@jbowwww/log');//.disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const { promisifyMethods } = require('../../utility.js');
 const _ = require('lodash');
@@ -30,16 +30,21 @@ disk.plugin(require('../plugin/artefact.js'));
 disk.static('populate', async function iterate(task) {
 		var model = this;
 		var debugPrefix = `[model ${model.modelName}].populate()`;
-		var dbOpt = { saveImmediate: true };
+		var dbOpt = { saveImmediate: false/* true*/ };
 		
 		const jsonDevices = await getDevices();
 		log.debug(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);
 
+		const disks = [];
+		const partitions = [];
+
 		try {
 			await promiseMap(jsonDevices, async disk => {
 				const diskDoc = await model.findOrCreate(disk, dbOpt);
+				disks.push(diskDoc);
+				log.debug(`diskDoc=${inspect(diskDoc)}`); // diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
 				await (async function mapPartitions(container, containerPartitionDoc) {
-					  (!container || !container.children ? null
+					return (!container || !container.children ? []
 				 : 	await promiseMap(container.children, async partition => {
 						partition = {
 								...partition,
@@ -47,13 +52,14 @@ disk.static('populate', async function iterate(task) {
 								container: containerPartitionDoc
 						};
 						const partitionDoc = await Partition.findOrCreate(partition, dbOpt);
+						partitions.push(partitionDoc);
 						log.debug(`partitionDoc=${inspect(partitionDoc)}`); // diskDoc=${inspect(diskDoc)} containerPartitionDoc=${inspect(containerPartitionDoc)} 
 						var mp = await mapPartitions(partition, partitionDoc);
 						return mp;
 					}))
 				})(disk);
 			});
-			await null;
+			return { disks, partitions };
 		} catch (e) {
 				console.error(`disk.iterate: error: ${e.stack||e}`);
 				model._stats.iterate.errors.push(e);

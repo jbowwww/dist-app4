@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log').disable('debug');//('model/plugin/custom-hooks');
+const log = require('@jbowwww/log');//.disable('debug');//('model/plugin/custom-hooks');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const { promisify } = require('util');
 const mongoose = require('mongoose');

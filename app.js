@@ -1,7 +1,7 @@
 
 "use strict";
-const debug = require('@jbowwww/debug')('app');
-const console = require('./stdio.js').Get('app', { minLevel: 'verbose' });	// debug verbose log
+const log = require('@jbowwww/log').disable('debug');
+const console = require('./stdio.js').Get('app', { minLevel: 'verbose' });	// log verbose log
 const inspect = require('./utility.js').makeInspect({ depth: 3, /*breakLength: 0,*/ compact: false });
 const { promisifyMethods } = require('./utility.js');
 const fs = promisifyMethods(require('fs'));
@@ -19,10 +19,10 @@ var app = {
 
 	db: {},	// { connection: undefined, url: undefined },
 	async dbConnect(url = 'mongodb://localhost:27017/ArtefactsJS') {
-		debug(`dbConnect: Opening db '${url}'...`);
+		log.verbose(`dbConnect: Opening db '${url}'...`);
 		try {
 			let connection = await mongoose.connect(url, { useNewUrlParser: true });
-			debug(`dbConnect: opened db '${url}'`);
+			log.verbose(`dbConnect: opened db '${url}'`);
 			app.db = { connection, url };
 			return connection;
 		} catch (err) {
@@ -30,10 +30,10 @@ var app = {
 		}
 	},
 	async dbClose() {
-		debug(`dbClose: Closing db '${app.db.url}' ...`);
+		log.verbose(`dbClose: Closing db '${app.db.url}' ...`);
 		try {
 			await mongoose.connection.close();
-			debug(`dbClose: db closed '${app.db.url}'`);
+			log.verbose(`dbClose: db closed '${app.db.url}'`);
 			app.db = {};
 		} catch (err) {
 			app.onError(`dbClose: Error closing db '${app.db.url}': ${err.stack||err}`);
@@ -64,7 +64,7 @@ var app = {
 		}
 		await Promise.all(_.map(funcs, fn => (fn instanceof Task ? fn : new Task(fn)).run()));
 		
-		debug(`Starting task '${task.name}'`);
+		log(`Starting task '${task.name}'`);
 		task.status = 'running';
 		task.promise = this._namespace.run(fn);//() => fn(task));
 		task.r = await task.promise;
@@ -72,13 +72,13 @@ var app = {
 		task.status = 'finished';
 		task.endTime = Date.now();
 		this._tasks.finished.push(task);
-		debug(`Finished task '${task.name}' in ${task.duration} ms: r=${inspect(task.r)} app._tasks=${inspect(app._tasks)}`);
+		log(`Finished task '${task.name}' in ${task.duration} ms: r=${inspect(task.r)} app._tasks=${inspect(app._tasks)}`);
 	
 	}
 	*/
 
 	logStats() {
-		debug( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
+		log( `mongoose.models count=${_.keys(mongoose.models).length} names=${mongoose.modelNames().join(', ')}\n` + 
 			`models[]._stats: ${inspect(_.mapValues(mongoose.models, (model, modelName) => (model._stats)))}\n` +
 			`heap stats: ${inspect(formatSizes(v8.getHeapStatistics()))}\n` + 
 			`mem usage: ${inspect(formatSizes(process.memoryUsage()))}\n` +
@@ -91,12 +91,12 @@ var app = {
 	logErrors() {
 		if (app.errors && app.errors.length > 0 && app._errorLastWritten < app.errors.length) {
 			fs.appendFileSync('errors.txt', app.errors.map(e => (e.stack||e)+'\n\n'));
-			debug(`Errors: ${inspect(app.errors, { depth: 3, compact: false })}`);
+			log.error(`Errors: ${inspect(app.errors, { depth: 3, compact: false })}`);
 			app._errorLastWritten = app.errors.length;
 		}
 		if (app.warnings && app.warnings.length > 0 && app._warningLastWritten < app.warnings.length) {
 			fs.appendFileSync('warnings.txt', app.warnings.map(e => (e.stack||e)+'\n\n'));
-			debug(`Errors: ${inspect(app.warnings, { depth: 3, compact: false })}`);
+			log.warn(`Warnings: ${inspect(app.warnings, { depth: 3, compact: false })}`);
 			app._warningLastWritten = app.warnings.length;
 		}
 	},
@@ -122,7 +122,7 @@ var app = {
 			rethrow = false;
 		}
 		app.warnings.push(err);
-		debug(`warn: ${msg?msg+' ':''}error: ${err.stack||err}`);
+		log.warn(`warn: ${msg?msg+' ':''}error: ${err.stack||err}`);
 		if (rethrow) {
 			throw err;
 		}
@@ -149,7 +149,7 @@ var app = {
 			rethrow = true;
 		}
 		app.errors.push(err);
-		debug(`warn: ${msg?msg+' ':''}error: ${err.stack||err}`);
+		log.warn(`warn: ${msg?msg+' ':''}error: ${err.stack||err}`);
 		if (rethrow) {
 			throw err;
 		}
@@ -161,7 +161,7 @@ var app = {
 	
 	onSigInt() {
 		app.logStats();
-		debug('Press ctrl-c again to quit ...');
+		log,log('Press ctrl-c again to quit ...');
 		process.once('SIGINT', quitHandler);
 		setTimeout(() => {
 			process.off('SIGINT', quitHandler);
@@ -182,7 +182,7 @@ var app = {
 		exitMsg += `  (exitCode=${exitCode}) ...`;
 		app.logStats();
 		await app.dbClose();
-		debug(exitMsg);
+		log.info(exitMsg);
 		process.nextTick(() => process.exit(exitCode));
 	}
 
