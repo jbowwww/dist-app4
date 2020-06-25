@@ -7,6 +7,7 @@ const clusterProcesses = require('@jbowwww/cluster-processes');
 
 const app = require('./app.js');
 const Disk = require('./model/filesys/disk.js');
+const Partition = require('./model/filesys/partition.js');
 const FsEntry = require('./model/filesys/filesys-entry.js');
 const File = require('./model/filesys/file.js');
 const Dir = require('./model/filesys/dir.js');
@@ -50,35 +51,22 @@ var searches = [
 			// },
 
 			async function populate (/*{ includeDisks } = { includeDisks: true }*/) {
-				// await app.dbConnect();
 				log.info(`Iterating disks...`);
-				const { disks, partitions } = await Disk.populate();
-				for (const disk of disks) {
-					log.verbose(`Saving disk: ${inspect(disk)}`);
-					await disk.save();
-				}
-				for (const part of partitions) {
-					log.verbose(`Saving partition: ${inspect(part)}`);
-					await part.save();
-				}
+				const { disks, partitions } = await Disk.iterate();
+				log.verbose(`${disks.length} disks, ${partitions.length} partitions`);
 				log.info('Starting directory searches...');
-				await promiseMap( await Disk.find({
-					"mountpoint": 	{ "$exists": true },
-					"$expr": 		{ "$gt": [ { "$strLenCP": "$mountpoint" }, 0 ] }
-				}), async disk => {
-					log.info(`Checking if disk is mounted for disk=${inspect(disk)}`);
-					if (typeof disk.mountpoint === 'string' && disk.mountpoint.length > 0) {
-						const searchesForDisk = searches.filter(search => search.path.startsWith(disk.mountpoint));
-						log.info(`Starting ${searchesForDisk.length} searches on disk at \'${disk.mountpoint}\'`);
-						for (const search of searchesForDisk) {
-							log.info(`Started search for path \'${search.path}\'`);
-							for await (const file of Dir.iterate(search)) {
-								await Artefact(file).save();
-							}
-							log.info(`Finished search for path \'${search.path}\'`);
+				await promiseMap( await Partition.find().mounted(), async partition => {
+					log.info(`Checking if partition is mounted for partition=${inspect(partition)}`);
+					const searchesForDisk = searches.filter(search => search.path.startsWith(partition.mountpoint));
+					log.info(`Starting ${searchesForDisk.length} searches on partition at \'${partition.mountpoint}\'`);
+					for (const search of searchesForDisk) {
+						log.info(`Started search for path \'${search.path}\'`);
+						for await (const file of Dir.iterate(search)) {
+							await Artefact(file).save();
 						}
-						log.info(`Finished all searches on disk at \'${disk.mountpoint}\'`);
+						log.info(`Finished search for path \'${search.path}\'`);
 					}
+					log.info(`Finished all searches on partition at \'${partition.mountpoint}\'`);
 				});
 				log.info('Finished all searches for all disks');
 				app.logStats();

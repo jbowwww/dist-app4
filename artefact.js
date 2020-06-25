@@ -1,8 +1,9 @@
 "use strict";
-const log = require('@jbowwww/log').disable('debug');
+const log = require('@jbowwww/log')//.disable('debug');
 const inspect = require('./utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const util = require('util');
 const { EventEmitter } = require('events');
+const { map: promiseMap } = require('@jbowwww/promise');
 const mongoose = require('mongoose');
 const { Document, Model, Query, SchemaTypes } = mongoose;
 // mongoose.set('debug', true);
@@ -10,26 +11,26 @@ const { Document, Model, Query, SchemaTypes } = mongoose;
 module.exports = Artefact;
 
 /* new plan - very simple
- * Artefact(doc, ...extraArgs) where
- * 	doc: a mongoose document to centre the artefact around (may not be significant going forward, just for simplicity's sake for now)
- * 	...extraArgs: mongoose models or docs, or a combination of those. For models specified, it will retrieve
- *  docs from the model's collection where _artefactId = doc._id(=this._id). FOr docs, associates those docs with
- * 	artefact (by internally setting it's _artefactId)
  * for simple usage inside iteration loops, etc
  * e.g. (TODO)
+ * Artefact(doc, ...extraArgs) where
+ * 	doc: a mongoose document to centre the artefact around (may not be significant going forward, just for simplicity's sake for now)
+ * 	...extraArgs: mongoose models or docs, or a combination of those.
+ * For models specified, it will retrieve docs from the model's collection where _artefactId = doc._id(=this._id).
+ * FOr docs, associates those docs with artefact (by internally setting it's _artefactId)
  */
 function Artefact(doc, ...extraArgs) {
 	if (!(this instanceof Artefact))
 		return new Artefact(doc, ...extraArgs);
 	if (!(doc instanceof Document))
 		throw new TypeError(`doc should be a mongoose.Document (doc=${inspect(doc)})`);
-	this._id = doc._id;
+	this._id = doc ? doc._id : null;
 	this._docs = new Set();
 	this._docsByType = new Map();
 	this._errors = [];
 	for (const arg of [ doc, ...extraArgs ])
-		this.add(arg);
-	log.verbose(`Artefact _id=${this._id}=${inspect(this)}`);
+		if (arg) this.set(arg);
+	log.verbose(`new Artefact _id=${this._id || '(null)'}=${inspect(this)}`);
 }
 
 Artefact.prototype = {
@@ -37,24 +38,16 @@ Artefact.prototype = {
 	...Artefact.prototype, 
 	constructor: Artefact,
 	
-	// this[model] {}
-	// get(model) {
-	// 	return this._docsByType.get(model);
-	// },
-	set(model, doc) {
-		doc._artefactId = this._id;
-		this._docs.add(doc);
-		this._docsByType.set(model.modelName, doc);
-		if (model.baseModelName && doc instanceof Document)
-			this._docsByType.set(/*mongoose.model*/(model.baseModelName), doc);
-		log.verbose(`Artefact _id=${this._id}: Setting for model='${model.modelName},${doc instanceof Document && model.baseModelName}' doc._id=${doc._id}`);
-		return this;
+	// get this(model) { return this.get(model); },
+	get(model) {
+		return this._docsByType.get(model);
 	},
-
-	add(docOrModel) {
+	set(docOrModel) {
 		let model;
 		if (docOrModel instanceof Document) {
 			model = docOrModel.constructor;
+			if (this._id) docOrModel._artefactId = this._id;
+			else this._id = docOrModel._artefactId;
 		} else if (typeof docOrModel === 'function'/* && docOrModel.name === 'Model'*/) {
 			model = docOrModel;
 			docOrModel = model.findOne({ _artefactId: this._id });
@@ -64,21 +57,38 @@ Artefact.prototype = {
 		} else {
 			throw new TypeError(`docOrModel should be a Document, Model(function) or Query but is=${typeof docOrModel} ${inspect(docOrModel)}`);
 		}
-		this.set(model, docOrModel);
+		if (docOrModel) {
+			this._docs.add(docOrModel);
+			this._docsByType.set(model.modelName, docOrModel);
+		}
+		// if (model.baseModelName)// && docOrModel instanceof Document)
+		// 	this._docsByType.set(model.baseModelName, docOrModel);
+		log.verbose(`Artefact _id=${this._id}: Setting for model='${model.modelName},${model.baseModelName}' docOrModel._id=${docOrModel._id}`);
 		return this;
 	},
 	with(...args) { 
 		for (const arg of args)
-			this.add(arg);
+			this.set(arg);
 		return this;
 	},
 
 	// returns { [doc.model.modelName]: mongoose.Document } where key is doc's model name
 	// uses _docs, (so no duplicate entries, all unique
 	async toDocuments() {
+		log.debug(`Artefact _id=${this._id}.toDocuments(); this=${inspect(this)}`);
+		// return await Promise.all(this._docs.values());
 		return await Promise.all(
-			Array.from(this._docs.values())
-			.map(value => Promise.resolve(value)) // unnecessary? wouldn't Promise.all just internally Promise.resolve any immediate _docs.values() ?
+			Array.from(this._docs.values()).map(async value => {
+				const resolvedValue = await Promise.resolve(value); // unnecessary? wouldn't Promise.all just internally Promise.resolve any immediate _docs.values() ?
+				this._docs.delete(value);
+				if (resolvedValue && resolvedValue !== value && resolvedValue != null) {
+					this.set(resolvedValue);
+					return resolvedValue;
+				}
+				else {
+					return value;
+				}
+			})
 		);
 	},
 	// returns { [doc.model]: doc }
@@ -87,7 +97,7 @@ Artefact.prototype = {
 		const r = {};
 		const promises = [];
 		for (const [modelName, doc] of this._docsByType.entries())	{
-			r[modelName] = doc;
+			// r[modelName] = doc;
 			promises.push(Promise.resolve(doc).then(
 				realDoc => r[modelName] = realDoc
 			));
@@ -98,12 +108,13 @@ Artefact.prototype = {
 	},
 
 	// accepts an artefact object, each value individually may be a mongoose.Document or a promise for one
+	// if artefact not supplied awaits on resolution of this artefact's components which may be promises (including queries[thenables])
 	async setArtefact(artefact = null) {
 		const origArg = artefact;
 		if (!artefact) artefact = await this.toDocuments();
 		log.debug(`Artefact _id=${this._id}.setArtefact(${inspect(origArg)})${!!origArg?'':(': set artefact='+inspect(artefact))}`);
 		for (const doc of Object.values(artefact))
-			if (doc) this.add(await doc);
+			if (doc) this.set(await doc);
 		return this;
 	},
 
@@ -150,8 +161,16 @@ Artefact.prototype = {
 	
 	async save(options = {}) {
 		log.verbose(`Artefact#${this._id}.save(): with types=${Array.from(this._docsByType.keys()).join(',')}`);
-		(await Promise.all(await this.toDocuments()))
-		.map(async doc => doc && doc.isModified() && await doc.save());
+		// await Promise.all(
+		(await this.toDocuments()).map(async doc => {
+			if (!doc) { log.warn(`doc = null fo artefact#${this._id}`); }
+			else {
+				log.debug(`Artefact#${this._id}.save(): model='${doc.constructor.modelName}' isNew=${doc.isNew} isModified=${doc.isModified()}`)
+				if (doc && (doc.isNew || doc.isModified()))
+					await doc.save();
+			}
+		});
+		return this;
 	},
 	
 	[util.inspect.custom]() {

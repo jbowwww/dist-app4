@@ -28,6 +28,22 @@ partition.plugin(require('../plugin/standard.js'));
 partition.plugin(require('../plugin/bulk-save.js'));
 // partition.plugin(require('../plugin/artefact.js'));
 
+partition.query.mounted = function mounted(matchMountpoint) {
+	return this.where({
+		"mountpoint": { "$exists": true },
+		"$expr":
+			typeof matchMountpoint == 'regex' ? { "mountpoint": matchMountpoint }
+		 : 	typeof matchMountpoint == 'string' ? { "mountpoint": new Regex(`^${matchMountpoint}.*$`, 'i') }
+		 : {
+			"$and": [ {
+				"$ne": [ "$mountpoint", null ]
+			}, {
+				"$gt": [ { "$strLenCP": "$mountpoint" }, 0 ]
+			} ]
+		}
+	});
+}
+
 function diskNameFromPartition(diskName) {
 	if (typeof diskName === 'string') {
 		for (var i = diskName.length; i > 0; i--) {

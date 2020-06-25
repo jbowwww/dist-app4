@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "dependencies": {
+    "@jbowwww/cluster-processes": "file:../modules/ClusterProcesses",
     "@jbowwww/iter-pipe": "file:../modules/iter-pipe",
+    "@jbowwww/log": "file:../modules/log",
+    "@jbowwww/promise": "file:../modules/promise",
+    "@jbowwww/shell": "file:../modules/Shell",
     "debug": "^4.1.1",
     "lodash": "^4.17.15",
     "mongoose": "^5.9.2",

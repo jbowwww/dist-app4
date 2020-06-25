@@ -86,8 +86,8 @@ module.exports = function standardSchemaPlugin(schema, options) {
 				(v, k) => v === undefined ? data[k] : v);
 
 		let r = await model.findOne(options.query);
-		if (r) log.verbose(`[model ${model.modelName}].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
-		else log.verbose(`[model ${model.modelName}].findOrCreate(): doc not found, creating with data=${inspect(data)};`); 		//(dk(${discriminatorKey})=${data[discriminatorKey]})
+		if (r) log.debug(`[model ${model.modelName}].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
+		else log.debug(`[model ${model.modelName}].findOrCreate(): doc not found, creating with data=${inspect(data)};`); 		//(dk(${discriminatorKey})=${data[discriminatorKey]})
 		if (r) {
 			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
 			model._stats.findOrCreate[r.isModified() ? 'update' : 'check']++;
@@ -100,7 +100,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 			const r2 = await r.save();
 			r = r2;
 		}
-		log.verbose(`[model ${model.modelName}].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+		log.debug(`[model ${model.modelName}].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
 		return r;
 	} catch (e) {
 		console.error(`[model ${model.modelName}].findOrCreate(): ERROR: ${e.message}`);

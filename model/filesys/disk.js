@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log');//.disable('debug');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 3, compact: false /* true */ });
 const { promisifyMethods } = require('../../utility.js');
 const _ = require('lodash');
@@ -27,10 +27,10 @@ disk.plugin(require('../plugin/bulk-save.js'));
 disk.plugin(require('../plugin/artefact.js'));
 // disk.plugin(require('../plugin/stat.js'), [ 'iterate' ]);
 
-disk.static('populate', async function iterate(task) {
+disk.static('iterate', async function iterate(task) {
 		var model = this;
-		var debugPrefix = `[model ${model.modelName}].populate()`;
-		var dbOpt = { saveImmediate: false/* true*/ };
+		var debugPrefix = `[model ${model.modelName}].iterate()`;
+		var dbOpt = { saveImmediate: true /*false*/ };
 		
 		const jsonDevices = await getDevices();
 		log.debug(`${debugPrefix}: jsonDevices=${inspect(jsonDevices)}`);

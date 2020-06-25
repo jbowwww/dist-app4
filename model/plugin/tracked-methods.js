@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log')//.disable('debug');//('model/plugin/standard');
+const log = require('@jbowwww/log').disable('debug');//('model/plugin/standard');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const mongoose = require('mongoose');
 
