@@ -24,34 +24,34 @@ file.virtual('extension').get(function extension() {
 	return (n < 0 || (n2 > 0 && n2 > n)) ? '' : this.path.slice(n + 1);
 });
 
-file.method('doHash', function doHash(forceRehash = false) {
+file.method('doHash', async function doHash(forceRehash = false) {
 	var file = this;
 	var model = this.constructor;
 	var debugPrefix = `[${typeof model} ${model.modelName}]`;
 	log.verbose(`${debugPrefix}.doHash: file=${inspect(file, { compact: false })} forceRehash=${forceRehash}`);
 	// some way to abstract/automate these basic stats for all methods? e.g. if isNew then create++, isModified then update++ else check++
-	model._stats.doHash.calls++;
-	if (!forceRehash && file.hash && file.stats && file.stats.mtime && file.isCheckedSince(file.stats.mtime)) {
- 		model._stats.doHash.success++;
-		model._stats.doHash.check++
-		return /*new Promise*/(file);
-	} else {
-		return hashFile(file.path).then((hash) => {
-			model._stats.doHash.success++;
+	try {
+		model._stats.doHash.calls++;
+		if (!forceRehash && file.hash && file.stats && file.stats.mtime && file.isCheckedSince(file.stats.mtime)) {
+			model._stats.doHash.check++
+			return /*new Promise*/(file);
+		} else {
+			const hash = await hashFile(file.path);
 			if (!file.hash) { model._stats.doHash.create++; }
 			else { model._stats.doHash.update++; }
 			file.hash = hash;
 			file.hashUpdated = Date.now();
 			log.verbose(`${debugPrefix}.doHash(): file='${file.path}' computed file.hash=..${hash.substr(-6)}`);
 			return file;
-		}).catch(err => {
-			model._stats.doHash.errors.push(err);
-			log.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
-			// return file;	// should i really actually be catching an err then returning file like nothing happened??
-			// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
-			throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
-		});
-	}
+		}
+ 		model._stats.doHash.success++;
+	} catch(err) {
+		model._stats.doHash.errors.push(err);
+		log.warn(`${debugPrefix}.doHash(): file='${file.path}' error: ${/*err.stack||*/err}`);
+		// return file;	// should i really actually be catching an err then returning file like nothing happened??
+		// TODO: All errors should get logged to the db, probably in a dedicated errors collection. In that case maybe set .hash to something like 'Error: ${error._id}'
+		throw err;	// for now pretending to have not intercepted it (now file.pre('validate' is catching it, for now) )
+	};
 });
 
 file.query.noCursorTimeout = function cursorNoTimeout() {

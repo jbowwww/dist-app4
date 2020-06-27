@@ -84,7 +84,8 @@ var searches = [
 										// 299402
 				for await (const file of File.find({ hash: { $exists: false } }).noCursorTimeout()) {
 					await Artefact(file).do(
-						({ file }) => ({ file: file.doHash() })
+						// Eitjer need this await on doHash() or hash should become it's own aspect type so that do() will await it
+						async ({ file }) => ({ file: await file.doHash() })
 					);
 				}
 				app.logStats();			
