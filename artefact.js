@@ -74,10 +74,10 @@ Artefact.prototype = {
 				aspect._artefactId = this._id;
 			} else if (type === 'model') {
 				// specify a model and will join using artefactId 
-				aspect = model.findById(this._id).then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?
+				aspect = model.findById(this._id);//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?
 			} else if (type === 'query') {
 				// same with query, just merges the artefactId into the query
-				aspect = aspect.merge({ _id: this._id }).then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?;
+				aspect = aspect.merge({ _id: this._id });//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?;
 			// } else if (typeof aspect.then === 'function') {
 				// promise-like - do i want to support this case or not? leave for now for simplicitys sake
 			} else {
@@ -107,10 +107,19 @@ Artefact.prototype = {
 			this.add(...Object.values(aspectsObj));
 		const promises = [];
 		for (const [modelName, aspect] of Object.entries(this))	{
+			if (!aspect) {
+				log.warn(`${this.logPrefix}: aspect '${modelName}' == null`);	// not necessarily bad, possibly necessary, just want to know for now
+				continue;
+			}
 			if (typeof aspect.then === 'function') {
-				promises.push(Promise.resolve(aspect).then(
-					realDoc => this[modelName] = realDoc
-				));
+				promises.push(Promise.resolve(aspect).then(realDoc => {
+					log.debug(`Resolved promise for ${this.logPrefix}:${modelName} aspect=${inspect(realDoc)}`);
+					if (!realDoc) {
+						delete this[modelName];
+					} else {
+						this[modelName] = realDoc;
+					}
+				}));
 			}
 		}
 		log.debug(`${this.logPrefix}: resolve(): Waiting on ${promises.length} promises...`);
@@ -163,14 +172,20 @@ Artefact.prototype = {
 	async save(options = {}) {
 		log.verbose(`Artefact#${this._id}.save(): with types=${Object.keys(this).join(',')}`);
 		// await Promise.all(
-		Object.entries(await this.resolve()).map(async ([modelName, aspect]) => {
-			if (!aspect) { log.warn(`aspect = null fo artefact#${this._id}`); }
-			else {
-				log.debug(`Artefact#${this._id}.save(): model='${modelName}' isNew=${aspect.isNew} isModified=${aspect.isModified()}`)
-				if (aspect && (aspect.isNew || aspect.isModified()))
-					await aspect.save();
+		await Promise.all(Object.entries(await this.resolve()).map(async ([modelName, aspect]) => {
+			try {
+				if (!aspect) { log.warn(`aspect = null fo artefact#${this._id}`); }
+				else {
+					log.debug(`Artefact#${this._id}.save(): model='${modelName}' isNew=${aspect.isNew} isModified=${aspect.isModified()} modifiedPaths=${aspect.modifiedPaths()} typeof=${typeof aspect.save} aspect=${inspect(aspect)}`);
+					if (aspect && (aspect.isNew || aspect.isModified()))
+						await aspect.save();
+				}
+				return aspect;
 			}
-		});
+			catch (e) {
+				log.warn(`${this.logPrefix}	:${modelName}: ${e.stack||e}`);
+			}
+		}));
 		return this;
 	}
 

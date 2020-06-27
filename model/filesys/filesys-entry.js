@@ -2,7 +2,6 @@
 const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 1, compact: false /* true */ });
 const nodeFs = require('fs').promises;
-const nodePath = require('path');
 const mongoose = require('mongoose');
 
 var statSchema = new mongoose.Schema({
@@ -37,18 +36,18 @@ var fsEntry = new mongoose.Schema({
 }, {
 	discriminatorKey: 'fileType',
 	defaultFindQuery: { path: undefined },
-	// toObject: { getters: true }
 });
 
 fsEntry.plugin(require('../plugin/standard.js'));
+
+/* TODO: Queue a function (runs on construct/create(?) that if stat is not set, will do the stat,
+ * allowing user to create file objects directly just by giving path
+ */
 
 const baseFindOrCreate = fsEntry.statics.findOrCreate;
 fsEntry.static('findOrCreate', async function findOrCreate(path, dir) {
 	if (typeof path !== 'string') throw new TypeError(`fsEntry.findOrCreate(): path should be a String but is a '${typeof path}'`);
 	const stats = await nodeFs.lstat(path);
-	// if (!dir) {
-	// dir = nodePath.dirname(path);	
-	// }
 	if (dir instanceof mongoose.Document)
 		dir = dir._id;
 	const fsEntry = await baseFindOrCreate.call(this, {
@@ -64,6 +63,6 @@ fsEntry.method('hasFileChanged', function() {
 	return this.hasUpdatedSince(this.stats.mtime);
 });
 
-module.exports = mongoose.model('fs', fsEntry);
-
-log.debug(`FsEntry: ${inspect(module.exports)}, FsEntry.prototype: ${inspect(module.exports.prototype)}, FsEntry.schema.childSchemas=${inspect(module.exports.schema.childSchemas, { depth: 2 })}	`);	//fsEntry: ${inspect(fsEntry)}, 
+const FsEntry = mongoose.model('fs', fsEntry);
+module.exports = FsEntry;
+log.debug(`FsEntry: ${inspect(FsEntry)}, FsEntry.prototype: ${inspect(FsEntry.prototype)}, FsEntry.schema.childSchemas=${inspect(FsEntry.schema.childSchemas, { depth: 2 })}	`);

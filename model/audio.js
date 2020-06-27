@@ -61,18 +61,15 @@ var audioSchema = new mongoose.Schema({
 audioSchema.plugin(require('./plugin/standard.js'));
 audioSchema.plugin(require('./plugin/bulk-save.js'));
 
-audioSchema.method.construct = function construct({ file }) {
+// audioSchema.plugin(require('./plugin/artefact.js'), [ 'file' ], ({ file }) => {
+//     if (file.path.match(/^[a-z]+.*\.[a-z]$/)) {
+//         return this.construct({ file }); 
+//     }
+// });
 
-};
-audioSchema.plugin(require('./plugin/artefact.js'), [ 'file' ], ({ file }) => {
-    if (file.path.match(/^[a-z]+.*\.[a-z]$/)) {
-        return this.construct({ file }); 
-    }
-});
+// audioSchema.pre('save', function preSave(cb) {
 
-audioSchema.pre('save', function preSave(cb) {
-
-});
+// });
 
 audioSchema.static('loadMetadata', function loadMetadata(file) {
     console.debug(`loadMetadata(file.path=${inspectPretty(file.path)})`);

@@ -94,9 +94,9 @@ var searches = [
 			async function populateAudio() {
 				for await (const file of File.find({ path: /.*\.mp3/i })) {
 					await Artefact(file).with(Audio).do(
-						({ file, audio }) => ({		// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
+						async ({ file, audio }) => ({		// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
 							audio:	( !audio || file.isUpdatedSince(audio) )
-						 			?  Audio.loadMetadata(file) : audio
+						 			?  await Audio.loadMetadata(file) : audio
 					}));
 					app.logStats();
 				}

@@ -50,6 +50,7 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.method('isUpdatedSince', function(timestamp) {
+		try {
 		if (timestamp instanceof Document)
 			timestamp = timestamp._ts;
 		return _.isDate(timestamp)
@@ -57,6 +58,10 @@ module.exports = function standardSchemaPlugin(schema, options) {
 		 && 	((this._ts.updatedAt
 		 && 	this._ts.updatedAt >= timestamp)
 		 || 	(this._ts.checkedAt && this._ts.checkedAt >= timestamp));
+		} catch (e) {
+			log.warn(`WARN isUpdatedSince: timestamp=${inspect(timestamp)} this=${inspect(this)}: ${e.stask||e}`);
+			throw e;
+		}
 	});
 
 	schema.static('findOrCreate', async function findOrCreate(...args) {
