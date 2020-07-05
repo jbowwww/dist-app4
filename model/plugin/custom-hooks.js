@@ -41,9 +41,11 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 						try {
 							let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, model, args)
 							log.debug(`[model ${modelName}].pre('${name}', ${argsString}): result=${inspect(result)}`);
+							if (result) args[0] = result;
 							result = await fn.apply(model, args);
 							log.debug(`[model ${modelName}].${name}(${argsString}): result=${inspect(result)}`);
-							result = await schemaHooksExecPost(name, model, [ result ]/*, { error: undefined }*/);
+							if (result) args[0] = result;
+							result = await schemaHooksExecPost(name, model, args);
 							log.debug(`[model ${modelName}].post('${name}', ${argsString}): result=${inspect(result)}`);
 							return result;
 						} catch (err) {
@@ -81,9 +83,11 @@ module.exports = function customHooksSchemaPlugin(schema, options) {
 						try {
 							let result = await promisify(schema.s.hooks.execPre.bind(schema.s.hooks))(name, doc, args); 
 							log.debug(`[doc ${modelName}].pre('${name}', ${argsString}): result=${inspect(result)}`);
+							if (result) args[0] = result;
 							result = await fn.apply(doc, args);
 							log.debug(`[doc ${modelName}].${name}(${argsString}): result=${inspect(result)}`);
-							result = await schemaHooksExecPost(name, doc, [ result ]/*, { error: undefined }*/);
+							if (result) args[0] = result;
+							result = await schemaHooksExecPost(name, doc, args);
 							log.debug(`[doc ${modelName}].post('${name}', ${argsString}): result=${inspect(result)}`);
 							return result;
 						} catch (e) {

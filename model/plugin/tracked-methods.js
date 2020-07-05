@@ -7,70 +7,78 @@ const stat = require('./stat.js');
 
 /* Track method call stats
  */
-module.exports = function tracjedNethodsSchemaPlugin(schema, trackedMethods) {
+module.exports = function trackedNethodsSchemaPlugin(schema, trackedMethods) {
 
 	const methods = [ ...trackedMethods.instance, ...trackedMethods.static ];
-	schema.plugin(stat, methods/* trackedMethods.instance*/);
-	for (const methodName in methods) { ///*trackedMethods.instance*/.forEach(function(methodName) {
+	schema.plugin(stat, methods);
+	for (const methodName in methods) {
 		schema.pre(methodName, function(next) {
-			var doc = this instanceof mongoose.Document ? this : null;
-			var model = doc ? doc.constructor : this;
-			// if (discriminatorKey && doc && doc[discriminatorKey]
-			//  && model && model.discriminators
-			//  && model.discriminators[doc[discriminatorKey]])
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			var eventName = 'pre.' + methodName;
-			if (model) {
-				// model.emit(eventName, doc);
-				model._stats[methodName].calls++;
+			const doc = this instanceof mongoose.Document ? this : null;
+			const model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (model._stats && model._stats[methodName]) {
+				// if (discriminatorKey && doc && doc[discriminatorKey]
+				//  && model && model.discriminators
+				//  && model.discriminators[doc[discriminatorKey]])
+				// 	model = model.discriminators[doc[discriminatorKey]];
+				// const eventName = 'pre.' + methodName;
+				if (model) {
+					// model.emit(eventName, doc);
+					model._stats[methodName].calls++;
+				}
+				if (doc) {
+					// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
+					const actionType = doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check';
+					model._stats[methodName][actionType]++;
+				}
+				log.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} next=${typeof next} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
+			} else {
+				log.warn(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} next=${typeof next} does not have _stats configured`);
 			}
-			if (doc) {
-				// doc.emit(eventName);			// i wonder what this gets bound as? in any case shuld be the doc
-				var actionType = /*doc instanceof mongoose.Document ?*/ doc.isNew ? 'create' : doc.isModified() ? 'update' : 'check' /*: 'static'*/;
-				model._stats[methodName][actionType]++;
-			}
-			log.debug(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} next=${typeof next} this=${inspect(this)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);	// doc=${doc._id}  doc._actions=${inspect(doc._actions)}
 			next();
 		});
 		schema.post(methodName, function(res, next) {
-			var doc = this instanceof mongoose.Document
-			 ? 	this
-			 : 	res instanceof mongoose.Document
-			 	? res : null;
-			var model = doc ? doc.constructor : this;
-			// if (discriminatorKey && doc && doc[discriminatorKey]
-			//  && model && model.discriminators
-			//  && model.discriminators[doc[discriminatorKey]])
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			var eventName = 'post.' + methodName;
-			if (model) {
-				model.emit(eventName, doc, res);
-				model._stats[methodName].success++;
+			var doc = this instanceof mongoose.Document ? this
+			 		: res instanceof mongoose.Document ? res : null;
+			var model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (model._stats && model._stats[methodName]) {
+				// if (discriminatorKey && doc && doc[discriminatorKey]
+				//  && model && model.discriminators
+				//  && model.discriminators[doc[discriminatorKey]])
+				// 	model = model.discriminators[doc[discriminatorKey]];
+				// var eventName = 'post.' + methodName;
+				if (model) {
+					// model.emit(eventName, doc, res);
+					model._stats[methodName].success++;
+				}
+				// if (doc)
+				// 	doc.emit(eventName, res);
+				log.debug(`[doc ${model.modelName}].post('${methodName}'): doc=${inspect(doc)} res=${inspect(res)} next=${typeof next} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
+			} else {
+				log.warn(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} next=${typeof next} does not have _stats configured`);
 			}
-			if (doc)
-				doc.emit(eventName, res);
-			log.verbose(`[doc ${model.modelName}].post('${methodName}'): doc=${doc._id||doc} res=${inspect(res)} next=${typeof next} this=${inspect(this)} model._stats.${methodName}=${inspect(model._stats[methodName])}`);
 			next();
 		});
 		schema.post(methodName, function(err, res, next) {
-			var doc = this instanceof mongoose.Document
-			 ? 	this
-			 : res instanceof mongoose.Document
-			 	? res : null;
-			var model = doc.constructor;
-			// if (discriminatorKey && doc && doc[discriminatorKey]
-			//  && model && model.discriminators
-			//  && model.discriminators[doc[discriminatorKey]])
-			// 	model = model.discriminators[doc[discriminatorKey]];
-			log.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${doc?doc._id:doc} res=${inspect(res)} next=${typeof next} this=${inspect(this)} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err?err.stack:err}`);
-			var eventName = 'err.' + methodName;
-			// at some point mongoose added its own Model.sonmething emitter that emits 'error', check it out
-			if (model) {
-				model.emit(eventName, doc, err);
-				model._stats[methodName].errors.push(err);
+			var doc = this instanceof mongoose.Document ? this
+			 		: res instanceof mongoose.Document ? res : null;
+			var model = doc instanceof mongoose.Document ? doc.constructor : this;
+			if (model._stats && model._stats[methodName]) {
+				// if (discriminatorKey && doc && doc[discriminatorKey]
+				//  && model && model.discriminators
+				//  && model.discriminators[doc[discriminatorKey]])
+				// 	model = model.discriminators[doc[discriminatorKey]];
+				log.error(`[doc ${model.modelName}].post('${methodName}') ERROR: doc=${inspect(doc)} res=${inspect(res)} next=${typeof next} model._stats.${methodName}=${inspect(model._stats[methodName])}: error: ${err?err.stack:err}`);
+				// var eventName = 'err.' + methodName;
+				// at some point mongoose added its own Model.sonmething emitter that emits 'error', check it out
+				if (model) {
+					// model.emit(eventName, doc, err);
+					model._stats[methodName].errors.push(err);
+				}
+				// if (doc)
+				// 	doc.emit(eventName, err);
+			} else {
+				log.warn(`[doc ${model.modelName}].pre('${methodName}'): doc=${inspect(doc)} next=${typeof next} does not have _stats configured`);
 			}
-			if (doc)
-				doc.emit(eventName, err);
 			return next(err);
 		});
 	}

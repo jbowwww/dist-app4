@@ -1,5 +1,5 @@
 "use strict";
-const log = require('@jbowwww/log').disable('debug');//('model/plugin/standard');
+const log = require('@jbowwww/log').disable('debug');
 const inspect = require('../../utility.js').makeInspect({ depth: 2, compact: false /* true */ });
 const mongoose = require('mongoose');
 const { Document, SchemaTypes } = mongoose;
@@ -13,8 +13,8 @@ const plugins = {
 };
 
 const trackedMethods = {
-	instance: [ "validate", "save", "bulkSave", "updateDocument" ],
-	static: [ "create", "findOrCreate", "upsert" ]
+	instance: [ "validate", "save", /*"bulkSave", "updateDocument"*/ ],
+	static: [ /*"create", */"findOrCreate"/*, "upsert" */]
 };
 
 /* Standard/common schema methods, statics
@@ -34,11 +34,11 @@ module.exports = function standardSchemaPlugin(schema, options) {
 										// hooks is necessary, it just creates stat entries, and creates schema method wrappers that increase stat counters
 	schema.plugin(plugins.trackedMethods, trackedMethods);	// track some method stats
 
-	schema.pre('save', function(/*doc, */next) {
-		const action = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
-		this.constructor._stats[action]++; 
-		next();
-	});
+	// schema.pre('save', function(/*doc, */next) {
+	// 	const action = this.isNew ? 'create' : this.isModified() ? 'update' : 'check';
+	// 	this.constructor._stats[action]++; 
+	// 	next();
+	// });
 	
 	schema.method('isCheckedSince', function isCheckedSince(timestamp) {
 		if (timestamp instanceof Document)
@@ -51,13 +51,13 @@ module.exports = function standardSchemaPlugin(schema, options) {
 
 	schema.method('isUpdatedSince', function(timestamp) {
 		try {
-		if (timestamp instanceof Document)
-			timestamp = timestamp._ts;
-		return _.isDate(timestamp)
-		 && 	!this.isNew
-		 && 	((this._ts.updatedAt
-		 && 	this._ts.updatedAt >= timestamp)
-		 || 	(this._ts.checkedAt && this._ts.checkedAt >= timestamp));
+			if (timestamp instanceof Document)
+				timestamp = timestamp._ts;
+			return _.isDate(timestamp)
+			 && 	!this.isNew
+			 && 	((this._ts.updatedAt
+			 && 	this._ts.updatedAt >= timestamp)
+			 || 	(this._ts.checkedAt && this._ts.checkedAt >= timestamp));
 		} catch (e) {
 			log.warn(`WARN isUpdatedSince: timestamp=${inspect(timestamp)} this=${inspect(this)}: ${e.stask||e}`);
 			throw e;
@@ -65,52 +65,53 @@ module.exports = function standardSchemaPlugin(schema, options) {
 	});
 
 	schema.static('findOrCreate', async function findOrCreate(...args) {
-	try {
-		var cb, query, data, model = this, options = {
-			saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
-			query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
-		};
-		args.forEach((arg, i) => {
-			if (typeof arg === 'object') {
-				if (!data) data = arg;
-				else options = { ...options, ...arg };
-			} else if (typeof arg === 'function') {
-				cb = arg;
-			} else {
-				throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
+		try {
+			var cb, query, data, model = this, options = {
+				saveImmediate: false,			// if true, calls doc.save() immediately after creation or after finding the doc 
+				query: undefined				// if not specified, tries to find a findOrCreate default query defined by the schema, or then if data has an _id, use that, or lastly by default query = data 
+			};
+			args.forEach((arg, i) => {
+				if (typeof arg === 'object') {
+					if (!data) data = arg;
+					else options = { ...options, ...arg };
+				} else if (typeof arg === 'function') {
+					cb = arg;
+				} else {
+					throw new TypeError(`findOrCreate accepts args data[, options][, cb]. Unexpected parameter type ${typeof arg} for arg #${i}. (args=${inspect(args)})`);
+				}
+			});
+
+			// I don't think the parsing/defaulting logic here is correct
+			if (!options.query)
+				options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
+			if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string'))
+				options.query = _.pick(data, options.query);
+			else if (_.isObject(options.query))
+				options.query = _.mapValues(schema.get('defaultFindQuery'),
+					(v, k) => v === undefined ? data[k] : v);
+
+			model._stats.findOrCreate.calls++;	// TODO: Once trackedMethods works OK, this and create/update/check counts below can be abstracted to that plugin
+			let r = await model.findOne(options.query);
+			if (r) log.debug(`[model ${model.modelName}].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
+			else log.debug(`[model ${model.modelName}].findOrCreate(): doc not found, creating with data=${inspect(data)};`); 		//(dk(${discriminatorKey})=${data[discriminatorKey]})
+			if (r) {
+				r.set(data); // does this always update the db ?? // await r.updateDocument(data);
+				model._stats.findOrCreate[r.isModified() ? 'update' : 'check']++;
 			}
-		});
-
-		// I don't think the parsing/defaulting logic here is correct
-		if (!options.query)
-			options.query = schema.get('defaultFindQuery') || (data._id ? { '_id': data._id } : _.clone(data));
-		if (_.isArray(options.query) && _.each(options.query, v => typeof v === 'string'))
-			options.query = _.pick(data, options.query);
-		else if (_.isObject(options.query))
-			options.query = _.mapValues(schema.get('defaultFindQuery'),
-				(v, k) => v === undefined ? data[k] : v);
-
-		let r = await model.findOne(options.query);
-		if (r) log.debug(`[model ${model.modelName}].findOrCreate(): doc found = ${inspect(r)}, update to data=${inspect(data)};`);
-		else log.debug(`[model ${model.modelName}].findOrCreate(): doc not found, creating with data=${inspect(data)};`); 		//(dk(${discriminatorKey})=${data[discriminatorKey]})
-		if (r) {
-			r.set(data); // does this always update the db ?? // await r.updateDocument(data);
-			model._stats.findOrCreate[r.isModified() ? 'update' : 'check']++;
+			else {
+				r = new model(data);
+				model._stats.findOrCreate['create']++;
+			}
+			if (r && options.saveImmediate) {
+				const r2 = await r.save();
+				r = r2;
+			}
+			log.debug(`[model ${model.modelName}].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
+			return r;
+		} catch (e) {
+			console.error(`[model ${model.modelName}].findOrCreate(): ERROR: ${e.message}`);
+			throw e;
 		}
-		else {
-			r = new model(data);
-			model._stats.findOrCreate['create']++;
-		}
-		if (r && options.saveImmediate) {
-			const r2 = await r.save();
-			r = r2;
-		}
-		log.debug(`[model ${model.modelName}].findOrCreate(): options=${inspect(options, { depth:3, compact: true })} defaultFindQuery=${inspect(schema.get('defaultFindQuery'), { compact: true })}': (inherited?)model='${(model.modelName)}'`);
-		return r;
-	} catch (e) {
-		console.error(`[model ${model.modelName}].findOrCreate(): ERROR: ${e.message}`);
-		throw e;
-	}
 	});
 
 

@@ -59,7 +59,7 @@ var audioSchema = new mongoose.Schema({
 // })
 
 audioSchema.plugin(require('./plugin/standard.js'));
-audioSchema.plugin(require('./plugin/bulk-save.js'));
+// audioSchema.plugin(require('./plugin/bulk-save.js'));
 
 // audioSchema.plugin(require('./plugin/artefact.js'), [ 'file' ], ({ file }) => {
 //     if (file.path.match(/^[a-z]+.*\.[a-z]$/)) {
