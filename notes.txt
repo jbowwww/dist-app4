@@ -1,3 +1,15 @@
+200628
+
+Working (again - sigh - stop breaking it - also node.js could stop sucking so blatantly - nobody knows WHAT node is doing at any given time - least of all node!!
+
+TODO
+Fix _stats again (sigh) or rethink?? keep simple thou!!
+Model static/ query function to wrap model.watch()
+Use watch() to define artefact relationships (between aspects) and triggers
+e.g. on File that matches mp3|wav|au|etc create audio
+Should be able to define these per-project or create some sort of Artefact class that is built with the relationships
+
+
 200315
 Tasks fro 200310 still
 First

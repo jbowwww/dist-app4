@@ -55,6 +55,8 @@ var searches = [
 				const { disks, partitions } = await Disk.iterate();
 				log.verbose(`${disks.length} disks, ${partitions.length} partitions`);
 				log.info('Starting directory searches...');
+				/// TODO: spawn separate process (per partition) with some IPC (serachesForDisk) per promise/process/partition
+				/// TODO: Or, separate into component files
 				await promiseMap( await Partition.find().mounted(), async partition => {
 					log.info(`Checking if partition is mounted for partition=${inspect(partition)}`);
 					const searchesForDisk = searches.filter(search => search.path.startsWith(partition.mountpoint));
@@ -64,6 +66,7 @@ var searches = [
 						for await (const file of Dir.iterate(search)) {
 							await Artefact(file).save();
 						}
+						app.logStats();
 						log.info(`Finished search for path \'${search.path}\'`);
 					}
 					log.info(`Finished all searches on partition at \'${partition.mountpoint}\'`);
@@ -87,19 +90,23 @@ var searches = [
 						// Eitjer need this await on doHash() or hash should become it's own aspect type so that do() will await it
 						async ({ file }) => ({ file: await file.doHash() })
 					);
+					app.logStats();
 				}
-				app.logStats();			
+				app.logStats();
 			},
 
 			async function populateAudio() {
-				for await (const file of File.find({ path: /.*\.mp3/i })) {
-					await Artefact(file).with(Audio).do(
-						async ({ file, audio }) => ({		// TODO: think: if could move the conditional part of below to query? then this becomes purely operation
-							audio:	( !audio || file.isUpdatedSince(audio) )
-						 			?  await Audio.loadMetadata(file) : audio
-					}));
-					app.logStats();
+				/// TODO: Only issue with this new syntax is returning new aspects of Artefacts - e.g. below doesn't add an 'audio' to the artefact therefore nor save one
+				for await (let { file, audio } of 
+					Artefact(
+						File.find({ path: /.*\.mp3/i }),
+						Audio )) {
+					if (!audio || file.isUpdatedSinc e(audio))
+						audio = await Audio.loadMetadata(file);
 				}
+				// 	app.logStats();
+				// }
+				app.logStats();
 			}
 
 

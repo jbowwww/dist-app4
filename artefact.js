@@ -7,18 +7,34 @@ module.exports = Artefact;
 
 // Returns { model, type } where model is the model object and type is string 'doc' 'model' or 'query'
 function modelFromAspect(aspect) {
-	const r = aspect instanceof Document ? { model: aspect.constructor/*.modelName*/, type: 'doc' }
+	const r = aspect instanceof Query ? { model: aspect.model/*.modelName*/, type: 'query' }
+		 : aspect instanceof Document ? { model: aspect.constructor/*.modelName*/, type: 'doc' }
 		 : typeof aspect === 'function' /*&& aspect.name === 'Model'*/ ? { model: aspect/*.modelName*/, type: 'model' }
 		 : typeof aspect === 'string' ? { model: mongoose.model(aspect)/*.modelName*/, type: 'model' }
-		 : aspect instanceof Query ? { model: aspect.model/*.modelName*/, type: 'query' }
 		 : { model: null, type: null }; //throw new Error(`Unknown aspect = ${inspect(aspect)}`);
 	log.debug(`modelFromAspect(): ${inspect(r)} returned from aspect=${inspect(aspect)}`);
 	return r;
 }
 
 function Artefact(...aspects) {
-	if (!(this instanceof Artefact))
-		return new Artefact(...aspects);
+	if (!(this instanceof Artefact) && aspects.length >= 1 && !!aspects[0]) {
+		 if (typeof aspects[0].then === 'function') {
+		 // if (Symbol[asyncIterator] && aspects[0][Symbol.asyncIterator]) {
+		// if (aspects[0] instanceof Query) {	
+	log.verbose(`Artefact has asyncIterator on aspects[0] aspects[]=${inspect(aspects)}`);
+			return (async function*() {
+				for await (const a0 of aspects[0]/*[Symbol.asyncIterator]*/) {
+					const a = await Artefact(a0).with(...aspects.slice(1)).resolve();
+					yield a;
+					log.debug(`Artefact async function*(): a=${inspect(a)}`);
+					await a.save();
+				}
+			})();
+		} else if (aspects[0] instanceof Document) {
+	log.verbose(`Artefact has a Document on aspects[0] aspects[]=${inspect(aspects)}`);
+			return new Artefact(...aspects);
+		}
+	}
 	Object.defineProperties(this, {
 		_id: { enumerable: false, writable: true, value: null },
 		_errors: { enumerable: false, writable: false, value: [] }
@@ -74,10 +90,10 @@ Artefact.prototype = {
 				aspect._artefactId = this._id;
 			} else if (type === 'model') {
 				// specify a model and will join using artefactId 
-				aspect = model.findById(this._id);//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?
+				aspect = model.findOne({ '_artefactId': this._id });//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?
 			} else if (type === 'query') {
 				// same with query, just merges the artefactId into the query
-				aspect = aspect.merge({ _id: this._id });//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?;
+				aspect = aspect.merge({ '_artefactId': this._id });//.then(res => this[model.modelName] = aspect); // might want to delete prop if null or undef?;
 			// } else if (typeof aspect.then === 'function') {
 				// promise-like - do i want to support this case or not? leave for now for simplicitys sake
 			} else {
