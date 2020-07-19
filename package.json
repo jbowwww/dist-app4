@@ -6,7 +6,7 @@
   "dependencies": {
     "@jbowwww/iter-pipe": "file:../modules/iter-pipe",
     "debug": "^4.1.1",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "mongoose": "^5.9.2",
     "music-metadata": "^6.3.4",
     "p-event": "^4.1.0",
